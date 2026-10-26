@@ -2,6 +2,9 @@ extends Control
 ## Batalha por turnos com mira em membros.
 ## A ordem de ação é por agilidade. Em cada turno de um membro da party o
 ## jogador escolhe a ação; ao atacar, escolhe qual membro do inimigo mirar.
+##
+## Magia segue a regra da luz (Jogo.forca_magia): sob o sol ou a lua funciona;
+## no escuro gasta uma carga de Pedra Solar. O inimigo carrega as próprias cargas.
 
 signal terminou(resultado: String)  # "vitoria", "derrota" ou "fuga"
 signal _escolha(valor)
@@ -9,6 +12,11 @@ signal _escolha(valor)
 const POS_INIMIGO := Vector2(384, 38)
 const PAUSA := 0.8
 const CHANCE_FUGA := 0.45
+## Raio: folha horizontal com 8 quadros de 220x100.
+const QUADROS_RAIO := 8
+## Ponto da mão do raio do paladino na textura de batalha.
+const MAO_RAIO := Vector2(163, 100)
+const NOME_LUZ := {"sol": "Sob o sol", "lua": "Sob a lua", "escuro": "No escuro"}
 
 ## Peso de cada parte quando o inimigo escolhe onde bater.
 const PESO_MIRA_INIMIGO := {"cabeca": 12, "torso": 40, "braco_esq": 16, "braco_dir": 16, "pernas": 16}
@@ -29,11 +37,14 @@ var texto_log: Label
 var linhas_log: Array[String] = []
 var menu: VBoxContainer
 var dica: Label
+var texto_luz: Label
+var luz := "escuro"
 var cartoes: Array[Dictionary] = []
 
 
 func _ready() -> void:
 	rng = Jogo.rng
+	luz = Jogo.luz_batalha
 	inimigo = Combatente.criar(Inimigos.DADOS[inimigo_id], false)
 	for dados in Jogo.party:
 		party.append(Combatente.criar(dados, true))
@@ -47,7 +58,7 @@ func _ready() -> void:
 func _montar_interface() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	var fundo := TextureRect.new()
-	fundo.texture = load("res://assets/batalha/fundo_catedral.png")
+	fundo.texture = load(Jogo.fundo_batalha)
 	fundo.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(fundo)
 
@@ -70,6 +81,13 @@ func _montar_interface() -> void:
 	barra_inimigo.position = Vector2(POS_INIMIGO.x, 24)
 	barra_inimigo.size = Vector2(192, 10)
 	add_child(barra_inimigo)
+
+	texto_luz = Label.new()
+	texto_luz.position = Vector2(10, 6)
+	texto_luz.add_theme_font_size_override("font_size", 12)
+	texto_luz.add_theme_color_override("font_outline_color", Color.BLACK)
+	texto_luz.add_theme_constant_override("outline_size", 4)
+	add_child(texto_luz)
 
 	var painel_log := _painel(Vector2(10, 298), Vector2(940, 60), Color(0, 0, 0, 0.7))
 	add_child(painel_log)
@@ -179,6 +197,12 @@ func _criar_cartao(c: Combatente, pos: Vector2) -> void:
 
 func _atualizar_tudo() -> void:
 	nome_inimigo.text = inimigo.nome
+	var forca := Jogo.forca_magia(luz)
+	var texto := "%s · %s · magia %d%%" % [Jogo.texto_relogio(), NOME_LUZ[luz], roundi(forca * 100)]
+	if luz == "escuro":
+		texto += (" · Pedra Solar: %d cargas" % Jogo.cargas_solares()) if Jogo.tem_pedra_solar() else " · sem Pedra Solar"
+	texto_luz.text = texto
+	texto_luz.add_theme_color_override("font_color", Color(1, 0.85, 0.4) if forca > 0 else Color(0.6, 0.55, 0.55))
 	barra_inimigo.max_value = inimigo.hp_max
 	barra_inimigo.value = inimigo.hp
 	overlay.queue_redraw()
@@ -347,8 +371,14 @@ func _escolher_habilidade(c: Combatente) -> Dictionary:
 	var opcoes := []
 	for hid in c.habilidades:
 		var h: Dictionary = Habilidades.DADOS[hid]
+		var sem_luz: bool = h.get("magia", false) and Jogo.forca_magia(luz) <= 0.0
+		var texto_dica: String = h["descricao"]
+		if sem_luz:
+			texto_dica = "Sem luz, a magia não responde. Procure um feixe de sol ou uma Pedra Solar."
+		elif h.get("magia", false) and luz == "escuro":
+			texto_dica += " Gasta 1 carga da Pedra Solar."
 		opcoes.append({"texto": "%s (%d MP)" % [h["nome"], h["custo"]], "valor": hid,
-			"desabilitado": c.mp < h["custo"], "dica": h["descricao"]})
+			"desabilitado": c.mp < h["custo"] or sem_luz, "dica": texto_dica})
 	var hid = await _menu(opcoes, true)
 	if hid == null:
 		return {}
@@ -420,36 +450,48 @@ func _executar(c: Combatente, acao: Dictionary) -> void:
 			var verbo := "ataca" if c.pode_atacar_com_arma() else "chuta"
 			_registrar("%s %s %s." % [c.nome, verbo, _onde(inimigo, acao["parte"])])
 			await _pausa(0.5)
-			await _golpear(inimigo, acao["parte"], _dano_base(c))
+			var efeito := ("corte" if rng.randf() < 0.5 else "corte_reto") if c.pode_atacar_com_arma() else "impacto"
+			await _golpear(inimigo, acao["parte"], _dano_base(c), 1.0, false, efeito)
 		"habilidade":
 			var h: Dictionary = Habilidades.DADOS[acao["id"]]
 			c.mp -= h["custo"]
+			var forca := 1.0
+			if h.get("magia", false):
+				forca = Jogo.forca_magia(luz)
+				if luz == "escuro" and Jogo.gastar_carga_solar():
+					_registrar("O último sol gravado na Pedra Solar se apaga. Ela vira pó.")
+					await _pausa(0.6)
 			_registrar("%s usa %s!" % [c.nome, h["nome"]])
 			await _pausa(0.5)
+			var efeito: String = h.get("efeito", "")
 			match h["alvo"]:
 				"inimigo":
 					var dano: int
 					if h.has("poder"):
-						dano = h["poder"] + rng.randi_range(-2, 4)
+						dano = roundi((h["poder"] + rng.randi_range(-2, 4)) * forca)
 					else:
 						dano = _dano_base(c, h.get("mult", 1.0))
-					await _golpear(inimigo, acao["parte"], dano, h.get("precisao", 1.0), h.get("ignora_esquiva", false))
+					await _golpear(inimigo, acao["parte"], dano, h.get("precisao", 1.0), h.get("ignora_esquiva", false), efeito)
 				"aliado":
 					var alvo: Combatente = acao["alvo"]
-					var curado := alvo.curar(h["cura"])
+					_efeito(efeito, _pos_alvo(alvo, "torso"))
+					var curado := alvo.curar(roundi(h["cura"] * forca))
 					alvo.sangrando = false
 					_registrar("%s recupera %d HP. O sangramento para." % [alvo.nome, curado])
 				"proprio":
+					_efeito(efeito, _pos_alvo(c, "torso"))
 					c.defendendo = true
 					c.mp = mini(c.mp_max, c.mp + h.get("mp_ganho", 0))
 					_registrar("%s firma a postura." % c.nome)
 		"item":
 			var alvo: Combatente = acao["alvo"]
 			Jogo.itens["bandagem"] -= 1
+			_efeito("luz", _pos_alvo(alvo, "torso"), 0.7)
 			alvo.sangrando = false
 			var curado := alvo.curar(10)
 			_registrar("%s enfaixa %s: +%d HP, sangramento estancado." % [c.nome, alvo.nome, curado])
 		"defender":
+			_efeito("bloqueio", _pos_alvo(c, "torso"))
 			c.defendendo = true
 			_registrar("%s se defende." % c.nome)
 		"fugir":
@@ -475,12 +517,31 @@ func _turno_inimigo(c: Combatente) -> void:
 		return
 	var alvo: Combatente = vivos[rng.randi() % vivos.size()]
 	var parte := _sortear_parte(alvo)
-	var golpe: Dictionary = c.ataques[rng.randi() % c.ataques.size()]
+	# Magia do inimigo segue a mesma regra da luz, com as Pedras Solares dele.
+	var golpes := []
+	for g in c.ataques:
+		if not g.get("magia", false) or luz != "escuro" or c.cargas_solares > 0:
+			golpes.append(g)
+	var golpe: Dictionary = golpes[rng.randi() % golpes.size()]
 	if not c.pode_atacar_com_arma():
-		golpe = {"nome": "Investida desesperada", "mult": 0.8}
+		golpe = {"nome": "Investida desesperada", "mult": 0.8, "efeito": "impacto"}
+	var magia: bool = golpe.get("magia", false)
+	var dano := _dano_base(c, golpe.get("mult", 1.0))
+	if magia:
+		var forca := Jogo.forca_magia(luz) if luz != "escuro" else 0.8
+		dano = roundi((golpe["poder"] + rng.randi_range(-2, 4)) * forca)
+		if luz == "escuro":
+			c.cargas_solares -= 1
 	_registrar("%s usa %s %s." % [c.nome, golpe["nome"], _onde(alvo, parte)])
 	await _pausa(0.5)
-	await _golpear(alvo, parte, _dano_base(c, golpe.get("mult", 1.0)), golpe.get("precisao", 1.0))
+	var efeito: String = golpe.get("efeito", "corte")
+	if efeito == "raio":
+		await _raio(POS_INIMIGO + MAO_RAIO, _pos_alvo(alvo, parte))
+		efeito = "faisca"
+	await _golpear(alvo, parte, dano, golpe.get("precisao", 1.0), golpe.get("ignora_esquiva", false), efeito)
+	if magia and luz == "escuro" and c.cargas_solares == 0:
+		await _pausa(0.4)
+		_registrar("A Pedra Solar de %s se desfaz em pó." % c.nome)
 	await _pausa()
 
 
@@ -507,11 +568,16 @@ func _onde(alvo: Combatente, parte: String) -> String:
 	return ""
 
 
-func _golpear(alvo: Combatente, parte: String, dano: int, precisao := 1.0, ignora_esquiva := false) -> void:
+func _golpear(alvo: Combatente, parte: String, dano: int, precisao := 1.0, ignora_esquiva := false, efeito := "corte") -> void:
 	var r := alvo.receber_golpe(parte, dano, rng, precisao, ignora_esquiva)
+	var pos := _pos_alvo(alvo, parte)
 	if not r["acertou"]:
+		_efeito("impacto", pos + Vector2(rng.randf_range(-40, 40), -20), 0.5, 0.45)
 		_registrar("Errou!")
 		return
+	_efeito(efeito, pos)
+	if r["decepou"]:
+		_efeito("faisca", pos, 1.3)
 	_piscar(sprite_inimigo if alvo == inimigo else cartoes[party.find(alvo)]["painel"])
 	_registrar("%d de dano em %s." % [r["dano"], alvo.nome])
 	if r["decepou"]:
@@ -523,6 +589,70 @@ func _golpear(alvo: Combatente, parte: String, dano: int, precisao := 1.0, ignor
 	if r["morreu"] and parte != "cabeca":
 		await _pausa(0.5)
 		_registrar("%s cai." % alvo.nome)
+
+
+# ================================================================ Efeitos
+
+## Posição na tela de uma parte do inimigo, ou do retrato de um membro da party.
+func _pos_alvo(alvo: Combatente, parte: String) -> Vector2:
+	if alvo == inimigo:
+		if parte in inimigo.regioes:
+			var r: Rect2 = inimigo.regioes[parte]
+			return POS_INIMIGO + r.get_center()
+		return POS_INIMIGO + sprite_inimigo.texture.get_size() / 2
+	var painel: Control = cartoes[party.find(alvo)]["painel"]
+	return painel.position + Vector2(70, 70)
+
+
+func _material_aditivo() -> CanvasItemMaterial:
+	var material := CanvasItemMaterial.new()
+	material.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	return material
+
+
+## Efeito de golpe ou magia: brilho aditivo que cresce e some.
+func _efeito(nome: String, pos: Vector2, escala := 1.0, opacidade := 1.0) -> void:
+	var caminho := "res://assets/efeitos/%s.png" % nome
+	if nome == "" or not ResourceLoader.exists(caminho):
+		return
+	var sprite := Sprite2D.new()
+	sprite.texture = load(caminho)
+	sprite.material = _material_aditivo()
+	sprite.position = pos
+	sprite.scale = Vector2.ONE * escala * 0.7
+	sprite.rotation = rng.randf_range(-0.3, 0.3)
+	sprite.modulate.a = opacidade
+	add_child(sprite)
+	var tween := sprite.create_tween()
+	tween.set_parallel()
+	tween.tween_property(sprite, "scale", Vector2.ONE * escala * 1.1, 0.4).set_ease(Tween.EASE_OUT)
+	tween.tween_property(sprite, "modulate:a", 0.0, 0.45).set_delay(0.15)
+	tween.chain().tween_callback(sprite.queue_free)
+
+
+## Raio animado, esticado de `de` até `ate`, com clarões na tela.
+func _raio(de: Vector2, ate: Vector2) -> void:
+	var sprite := Sprite2D.new()
+	sprite.texture = load("res://assets/efeitos/raio.png")
+	sprite.hframes = QUADROS_RAIO
+	sprite.centered = false
+	sprite.offset = Vector2(0, -50)
+	sprite.material = _material_aditivo()
+	sprite.position = de
+	sprite.rotation = (ate - de).angle()
+	sprite.scale = Vector2(de.distance_to(ate) / 220.0, 1.0)
+	add_child(sprite)
+	var clarao := ColorRect.new()
+	clarao.color = Color(1, 0.95, 0.6, 0.0)
+	clarao.set_anchors_preset(Control.PRESET_FULL_RECT)
+	clarao.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(clarao)
+	for i in QUADROS_RAIO * 2:
+		sprite.frame = i % QUADROS_RAIO
+		clarao.color.a = 0.18 if i % 3 == 0 else 0.0
+		await _pausa(0.05)
+	sprite.queue_free()
+	clarao.queue_free()
 
 
 func _verificar_fim() -> void:

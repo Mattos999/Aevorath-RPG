@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://dmypq815ywmf3"
-path="res://.godot/imported/retrato_iselde.png-3d67aae867bc67eb38243937b4551b12.ctex"
+uid="uid://0rmyb186dfk2"
+path="res://.godot/imported/protagonista2.png-888d52e88097304c0607c35b2c3cd43d.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/batalha/retrato_iselde.png"
-dest_files=["res://.godot/imported/retrato_iselde.png-3d67aae867bc67eb38243937b4551b12.ctex"]
+source_file="res://assets/sprites/protagonista2.png"
+dest_files=["res://.godot/imported/protagonista2.png-888d52e88097304c0607c35b2c3cd43d.ctex"]
 
 [params]
 

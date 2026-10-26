@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://78o1dj2bkhks"
-path="res://.godot/imported/retrato_doran.png-3b8e28b1133962fc280df7e464656b2b.ctex"
+uid="uid://b8pyvx6w81hqr"
+path="res://.godot/imported/balde.png-6df186a568e008433431ef13bff59ad2.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/batalha/retrato_doran.png"
-dest_files=["res://.godot/imported/retrato_doran.png-3b8e28b1133962fc280df7e464656b2b.ctex"]
+source_file="res://assets/tiles/balde.png"
+dest_files=["res://.godot/imported/balde.png-6df186a568e008433431ef13bff59ad2.ctex"]
 
 [params]
 

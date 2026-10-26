@@ -60,6 +60,8 @@ var partes: Dictionary = {}
 var regioes: Dictionary = {}
 var defendendo := false
 var sangrando := false
+## Cargas de Pedra Solar do inimigo (a party usa as pedras do Jogo).
+var cargas_solares := 0
 
 
 static func criar(dados: Dictionary, jogador: bool) -> Combatente:
@@ -79,6 +81,7 @@ static func criar(dados: Dictionary, jogador: bool) -> Combatente:
 	c.ataques = dados.get("ataques", [{"nome": "Golpe", "mult": 1.0}]).duplicate(true)
 	c.regioes = dados.get("regioes", {})
 	c.sangrando = dados.get("sangrando", false)
+	c.cargas_solares = dados.get("cargas_solares", 0)
 	var hp_partes: Dictionary = dados.get("hp_partes", {})
 	var decepados: Array = dados.get("decepados", [])
 	for p in PARTES:

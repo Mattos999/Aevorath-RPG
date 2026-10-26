@@ -7,15 +7,19 @@ const TEMPO_PASSO := 0.14
 const ALCANCE_PERSEGUICAO := 6
 const INTERVALO_INIMIGO := 0.45
 
-const TEX_CHAO := preload("res://assets/tiles/chao.png")
-const TEX_PAREDE := preload("res://assets/tiles/parede.png")
-const TEX_ALTAR := preload("res://assets/tiles/altar.png")
-const TEX_SANGUE := preload("res://assets/tiles/sangue.png")
-const TEX_PLACA := preload("res://assets/tiles/placa.png")
-const TEX_SAIDA := preload("res://assets/tiles/saida.png")
-const TEX_HEROI := preload("res://assets/sprites/heroi.png")
+const INIMIGO_POR_LETRA := {"C": "cruzado", "O": "oco", "N": "sarnheim", "V": "paladino"}
 
-const INIMIGO_POR_LETRA := {"C": "cruzado", "O": "oco", "N": "sarnheim"}
+## Letras que viram textura direta (o resto é tratado em _textura_do_tile).
+const TEXTURA_POR_LETRA := {
+	"T": "parede_tocha", "|": "grade", "D": "cela_fechada", "d": "cela_aberta",
+	"W": "porta", "X": "escada", ",": "sangue", "*": "chao_sol",
+	"B": "cama", "U": "balde", "R": "barril", "Q": "caixa", "A": "altar",
+	"S": "placa", "K": "esqueleto",
+}
+const PAREDES := "#T|D"
+const PASSAVEIS := ".,~*dWXG"
+## Inimigos não passam por portas nem pela escada.
+const PASSAVEIS_INIMIGO := ".,~*"
 
 const DIRECOES := {
 	"mover_cima": Vector2i.UP,
@@ -23,13 +27,18 @@ const DIRECOES := {
 	"mover_esquerda": Vector2i.LEFT,
 	"mover_direita": Vector2i.RIGHT,
 }
+const LINHA_FOLHA := {Vector2i.DOWN: 0, Vector2i.LEFT: 1, Vector2i.RIGHT: 2, Vector2i.UP: 3}
 
-var mapa: Dictionary = Mapas.CRIPTA
+var mapa: Dictionary = Mapas.PRISAO
 var grade: Array[String] = []
-var placas: Dictionary = {}  # Vector2i -> texto
-var inimigos: Dictionary = {}  # id -> {no, pos, tipo}
+var textos: Dictionary = {}  # Vector2i -> texto (placas e esqueletos)
+var inimigos: Dictionary = {}  # id -> {no, pos, tipo, passo}
+var npcs: Dictionary = {}  # Vector2i -> {no, id}
+var pedras_no_chao: Dictionary = {}  # Vector2i -> Sprite2D
+var texturas: Dictionary = {}
 
 var jogador: Sprite2D
+var passo_jogador := 0
 var pos_jogador := Vector2i.ZERO
 var direcao := Vector2i.DOWN
 var movendo := false
@@ -40,16 +49,27 @@ var tregua := 0.0  # segundos sem batalha após uma fuga
 var hud: Label
 var caixa_dialogo: PanelContainer
 var texto_dialogo: Label
+var nome_dialogo: Label
+var retrato_dialogo: TextureRect
+var paginas: Array = []
+var ao_fim_dialogo: Callable
 
 
 func _ready() -> void:
 	_carregar_mapa()
+	_criar_feixes()
 	_criar_interface()
 	_atualizar_hud()
 
 
+func _tex(nome: String) -> Texture2D:
+	if not texturas.has(nome):
+		texturas[nome] = load("res://assets/tiles/%s.png" % nome)
+	return texturas[nome]
+
+
 func _carregar_mapa() -> void:
-	var indice_placa := 0
+	var indice_texto := 0
 	for y in mapa["linhas"].size():
 		var linha: String = mapa["linhas"][y]
 		var limpa := ""
@@ -60,10 +80,30 @@ func _carregar_mapa() -> void:
 				"P":
 					pos_jogador = pos
 					c = "."
-				"S":
-					placas[pos] = mapa["placas"][indice_placa] if indice_placa < mapa["placas"].size() else "..."
-					indice_placa += 1
-				"C", "O", "N":
+				"S", "K":
+					textos[pos] = mapa["textos"][indice_texto] if indice_texto < mapa["textos"].size() else "..."
+					indice_texto += 1
+				"G":
+					if Jogo.eventos.has("pedra_%d_%d" % [x, y]):
+						c = "."
+					else:
+						var pedra := Sprite2D.new()
+						pedra.texture = load("res://assets/itens/pedra_solar_24.png")
+						pedra.position = Vector2(pos * TILE) + Vector2(TILE, TILE) / 2
+						pedra.z_index = 1
+						add_child(pedra)
+						pedras_no_chao[pos] = pedra
+				"H":
+					_criar_npc("encapuzado", "res://assets/sprites/encapuzado.png", pos)
+					c = "."
+				"I":
+					if not Jogo.eventos.has("iselde"):
+						_criar_npc("iselde", "res://assets/sprites/protagonista2.png", pos)
+					c = "."
+				"D":
+					if Jogo.eventos.has("porta_%d_%d" % [x, y]):
+						c = "d"
+				"C", "O", "N", "V":
 					var id := "%s_%d_%d" % [c, x, y]
 					if not Jogo.inimigos_derrotados.has(id):
 						_criar_inimigo(id, INIMIGO_POR_LETRA[c], pos)
@@ -71,12 +111,8 @@ func _carregar_mapa() -> void:
 			limpa += c
 		grade.append(limpa)
 
-	jogador = Sprite2D.new()
-	jogador.texture = TEX_HEROI
-	jogador.centered = false
-	jogador.position = Vector2(pos_jogador * TILE)
+	jogador = _sprite_de_folha(Jogo.party[0]["folha_mapa"], pos_jogador)
 	jogador.z_index = 2
-	add_child(jogador)
 
 	var camera := Camera2D.new()
 	camera.position = Vector2(TILE / 2, TILE / 2)
@@ -89,36 +125,64 @@ func _carregar_mapa() -> void:
 	queue_redraw()
 
 
-func _criar_inimigo(id: String, tipo: String, pos: Vector2i) -> void:
+func _sprite_de_folha(caminho: String, pos: Vector2i) -> Sprite2D:
 	var no := Sprite2D.new()
-	no.texture = load(Inimigos.DADOS[tipo]["sprite_mapa"])
+	no.texture = load(caminho)
 	no.centered = false
 	no.position = Vector2(pos * TILE)
 	no.z_index = 1
-	if Inimigos.DADOS[tipo].get("folha_mapa", false):
+	if no.texture.get_width() == 96 and no.texture.get_height() == 128:
 		no.hframes = 3
 		no.vframes = 4
 	add_child(no)
-	inimigos[id] = {"no": no, "pos": pos, "tipo": tipo, "passo": 0}
+	return no
+
+
+func _criar_inimigo(id: String, tipo: String, pos: Vector2i) -> void:
+	inimigos[id] = {"no": _sprite_de_folha(Inimigos.DADOS[tipo]["sprite_mapa"], pos), "pos": pos, "tipo": tipo, "passo": 0}
+
+
+func _criar_npc(id: String, folha: String, pos: Vector2i) -> void:
+	npcs[pos] = {"no": _sprite_de_folha(folha, pos), "id": id}
+
+
+## Brilho aditivo sobre os feixes de luz.
+func _criar_feixes() -> void:
+	var feixes := Node2D.new()
+	var material := CanvasItemMaterial.new()
+	material.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	feixes.material = material
+	feixes.z_index = 3
+	feixes.draw.connect(func():
+		var cor := Color(1.0, 0.82, 0.45, 0.16) if Jogo.eh_dia() else Color(0.55, 0.65, 1.0, 0.12)
+		for y in grade.size():
+			for x in grade[y].length():
+				if grade[y][x] == "*":
+					feixes.draw_rect(Rect2(x * TILE + 4, (y - 1) * TILE, TILE - 8, TILE * 2), cor))
+	add_child(feixes)
+	set_meta("feixes", feixes)
+
+
+func _textura_do_tile(x: int, y: int) -> Texture2D:
+	var c := grade[y][x]
+	var variacao := (x * 7 + y * 13) % 5
+	match c:
+		"#":
+			var abaixo := _tile(Vector2i(x, y + 1))
+			if abaixo in PAREDES:
+				return _tex("parede_topo")
+			return _tex("parede2" if variacao == 0 else "parede")
+		".", "G":
+			return _tex("chao2" if variacao == 0 else "chao")
+		"~":
+			return _tex(["chao_rachado", "chao_rachado2", "chao_rachado3"][variacao % 3])
+	return _tex(TEXTURA_POR_LETRA.get(c, "chao"))
 
 
 func _draw() -> void:
 	for y in grade.size():
 		for x in grade[y].length():
-			var destino := Vector2(x * TILE, y * TILE)
-			match grade[y][x]:
-				"#":
-					draw_texture(TEX_PAREDE, destino)
-				"A":
-					draw_texture(TEX_ALTAR, destino)
-				",":
-					draw_texture(TEX_SANGUE, destino)
-				"S":
-					draw_texture(TEX_PLACA, destino)
-				"X":
-					draw_texture(TEX_SAIDA, destino)
-				_:
-					draw_texture(TEX_CHAO, destino)
+			draw_texture(_textura_do_tile(x, y), Vector2(x * TILE, y * TILE))
 
 
 # ---------------------------------------------------------------- Interface
@@ -142,15 +206,30 @@ func _criar_interface() -> void:
 	fundo_hud.add_child(hud)
 
 	caixa_dialogo = PanelContainer.new()
-	caixa_dialogo.position = Vector2(40, 390)
-	caixa_dialogo.custom_minimum_size = Vector2(880, 130)
-	caixa_dialogo.add_theme_stylebox_override("panel", _estilo_painel(Color(0.05, 0.03, 0.04, 0.92)))
+	caixa_dialogo.position = Vector2(40, 380)
+	caixa_dialogo.custom_minimum_size = Vector2(880, 140)
+	caixa_dialogo.add_theme_stylebox_override("panel", _estilo_painel(Color(0.05, 0.03, 0.04, 0.94)))
 	caixa_dialogo.visible = false
 	camada.add_child(caixa_dialogo)
+	var linha := HBoxContainer.new()
+	linha.add_theme_constant_override("separation", 14)
+	caixa_dialogo.add_child(linha)
+	retrato_dialogo = TextureRect.new()
+	retrato_dialogo.custom_minimum_size = Vector2(112, 112)
+	retrato_dialogo.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	retrato_dialogo.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	linha.add_child(retrato_dialogo)
+	var coluna := VBoxContainer.new()
+	coluna.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	linha.add_child(coluna)
+	nome_dialogo = Label.new()
+	nome_dialogo.add_theme_color_override("font_color", Color(0.85, 0.7, 0.3))
+	coluna.add_child(nome_dialogo)
 	texto_dialogo = Label.new()
 	texto_dialogo.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	texto_dialogo.custom_minimum_size = Vector2(700, 0)
 	texto_dialogo.add_theme_font_size_override("font_size", 16)
-	caixa_dialogo.add_child(texto_dialogo)
+	coluna.add_child(texto_dialogo)
 
 
 static func _estilo_painel(cor: Color) -> StyleBoxFlat:
@@ -162,8 +241,18 @@ static func _estilo_painel(cor: Color) -> StyleBoxFlat:
 	return estilo
 
 
+func _luz_aqui() -> String:
+	if mapa["luz"] == "aberto" or _tile(pos_jogador) == "*":
+		return Jogo.luz_do_ceu()
+	return "escuro"
+
+
 func _atualizar_hud() -> void:
-	var linhas := [mapa["nome"]]
+	var nomes_luz := {"sol": "Sob o sol", "lua": "Sob a lua", "escuro": "Escuro"}
+	var luz := _luz_aqui()
+	var linhas := [mapa["nome"], "%s  |  %s" % [Jogo.texto_relogio(), nomes_luz[luz]]]
+	if luz != "escuro":
+		linhas[1] += " (magia %d%%)" % roundi(Jogo.forca_magia(luz) * 100)
 	for membro in Jogo.party:
 		var hp: int = membro.get("hp_atual", membro["hp"])
 		var mp: int = membro.get("mp_atual", membro["mp"])
@@ -173,19 +262,56 @@ func _atualizar_hud() -> void:
 		elif membro.get("sangrando", false):
 			estado = "  (sangrando)"
 		linhas.append("%s  HP %d/%d  MP %d/%d%s" % [membro["nome"], hp, membro["hp"], mp, membro["mp"], estado])
-	linhas.append("Bandagens: %d" % Jogo.itens.get("bandagem", 0))
+	var itens := "Bandagens: %d" % Jogo.itens.get("bandagem", 0)
+	if Jogo.tem_pedra_solar():
+		itens += "   Pedra Solar: %d/%d" % [Jogo.pedras_solares[0], Jogo.CARGAS_PEDRA]
+		if Jogo.pedras_solares.size() > 1:
+			itens += " (+%d)" % (Jogo.pedras_solares.size() - 1)
+	if Jogo.itens.get("chave", 0) > 0:
+		itens += "   Chave das celas"
+	linhas.append(itens)
 	hud.text = "\n".join(linhas)
 
 
-func _mostrar_dialogo(texto: String) -> void:
-	texto_dialogo.text = texto + "\n\n[Z]"
-	caixa_dialogo.visible = true
+## Mostra uma sequência de falas. Cada página: texto (String) ou
+## {texto, nome, retrato}. `ao_fim` roda quando a última fecha.
+func _mostrar_dialogo(conteudo, ao_fim := Callable()) -> void:
+	paginas = conteudo if conteudo is Array else [conteudo]
+	ao_fim_dialogo = ao_fim
 	bloqueado = true
+	caixa_dialogo.visible = true
+	_mostrar_pagina()
 
 
-func _fechar_dialogo() -> void:
+func _mostrar_pagina() -> void:
+	var pagina = paginas.pop_front()
+	if pagina is String:
+		pagina = {"texto": pagina}
+	nome_dialogo.text = pagina.get("nome", "")
+	nome_dialogo.visible = nome_dialogo.text != ""
+	var retrato: String = pagina.get("retrato", "")
+	retrato_dialogo.texture = load(retrato) if retrato != "" else null
+	retrato_dialogo.visible = retrato != ""
+	texto_dialogo.text = pagina["texto"] + "\n[Z]"
+
+
+func _avancar_dialogo() -> void:
+	if not paginas.is_empty():
+		_mostrar_pagina()
+		return
 	caixa_dialogo.visible = false
 	bloqueado = false
+	if ao_fim_dialogo.is_valid():
+		var acao := ao_fim_dialogo
+		ao_fim_dialogo = Callable()
+		acao.call()
+
+
+static func _falas(lista: Array, nome: String, retrato: String) -> Array:
+	var paginas_ := []
+	for texto in lista:
+		paginas_.append({"texto": texto, "nome": nome, "retrato": retrato})
+	return paginas_
 
 
 # ---------------------------------------------------------------- Loop
@@ -193,7 +319,7 @@ func _fechar_dialogo() -> void:
 func _process(delta: float) -> void:
 	if caixa_dialogo.visible:
 		if Input.is_action_just_pressed("interagir"):
-			_fechar_dialogo()
+			_avancar_dialogo()
 		return
 	if bloqueado:
 		return
@@ -224,8 +350,14 @@ func _tile(pos: Vector2i) -> String:
 	return grade[pos.y][pos.x]
 
 
+func _trocar_tile(pos: Vector2i, c: String) -> void:
+	var linha := grade[pos.y]
+	grade[pos.y] = linha.substr(0, pos.x) + c + linha.substr(pos.x + 1)
+	queue_redraw()
+
+
 func _livre(pos: Vector2i) -> bool:
-	return _tile(pos) in [".", ",", "X"]
+	return _tile(pos) in PASSAVEIS and not npcs.has(pos)
 
 
 func _inimigo_em(pos: Vector2i) -> String:
@@ -235,9 +367,16 @@ func _inimigo_em(pos: Vector2i) -> String:
 	return ""
 
 
+func _virar(no: Sprite2D, dir: Vector2i, passo: int) -> void:
+	if no.hframes >= 3:
+		no.frame = LINHA_FOLHA[dir] * 3 + passo
+	elif dir.x != 0:
+		no.flip_h = dir == Vector2i.LEFT
+
+
 func _tentar_mover(dir: Vector2i) -> void:
 	direcao = dir
-	jogador.flip_h = dir == Vector2i.LEFT if dir.x != 0 else jogador.flip_h
+	_virar(jogador, dir, passo_jogador)
 	var alvo := pos_jogador + dir
 	var inimigo := _inimigo_em(alvo)
 	if inimigo != "":
@@ -247,22 +386,79 @@ func _tentar_mover(dir: Vector2i) -> void:
 		return
 	pos_jogador = alvo
 	movendo = true
+	passo_jogador = (passo_jogador + 1) % 3
+	_virar(jogador, dir, passo_jogador)
+	Jogo.passar_tempo()
 	var tween := create_tween()
 	tween.tween_property(jogador, "position", Vector2(alvo * TILE), TEMPO_PASSO)
 	await tween.finished
 	movendo = false
-	if _tile(pos_jogador) == "X":
-		_mostrar_dialogo("Uma escada sobe para a luz dos Nove Sóis... e para os Cruzados lá fora.\nFim da demonstração. Obrigado por jogar!")
+	_virar(jogador, dir, 0)
+	_atualizar_hud()
+	match _tile(pos_jogador):
+		"G":
+			_pegar_pedra(pos_jogador)
+		"X":
+			_mostrar_dialogo("A escada sobe para a luz dos Nove Sóis... e para os Cruzados lá fora.\nFim da demonstração. Obrigado por jogar!")
+
+
+func _pegar_pedra(pos: Vector2i) -> void:
+	Jogo.eventos["pedra_%d_%d" % [pos.x, pos.y]] = true
+	Jogo.ganhar_pedra_solar()
+	if pedras_no_chao.has(pos):
+		pedras_no_chao[pos].queue_free()
+		pedras_no_chao.erase(pos)
+	_trocar_tile(pos, ".")
+	_atualizar_hud()
+	_mostrar_dialogo({"texto": "Você encontrou uma Pedra Solar. Nove sóis gravados brilham fracos na pedra.",
+		"retrato": "res://assets/itens/pedra_solar_96.png"})
 
 
 func _interagir() -> void:
 	var alvo := pos_jogador + direcao
-	if placas.has(alvo):
-		_mostrar_dialogo(placas[alvo])
-	elif _tile(alvo) == "A":
-		Jogo.descansar()
-		_atualizar_hud()
-		_mostrar_dialogo("Você reza diante do Altar dos Nove Sóis. As feridas fecham e o sangue estanca.\nO que foi perdido, porém, não volta.")
+	if npcs.has(alvo):
+		_falar_com(alvo)
+	elif textos.has(alvo):
+		_mostrar_dialogo(textos[alvo])
+	else:
+		match _tile(alvo):
+			"A":
+				Jogo.descansar()
+				_atualizar_hud()
+				_mostrar_dialogo("Você reza diante do Altar dos Nove Sóis. As feridas fecham e o sangue estanca.\nO que foi perdido, porém, não volta.")
+			"D":
+				if Jogo.itens.get("chave", 0) > 0:
+					Jogo.eventos["porta_%d_%d" % [alvo.x, alvo.y]] = true
+					_trocar_tile(alvo, "d")
+					_mostrar_dialogo("A chave gira com um rangido. A cela se abre.")
+				else:
+					_mostrar_dialogo("A porta da cela está trancada.")
+			"G":
+				_pegar_pedra(alvo)
+
+
+func _falar_com(pos: Vector2i) -> void:
+	var npc: Dictionary = npcs[pos]
+	_virar(npc["no"], -direcao, 0)
+	match npc["id"]:
+		"encapuzado":
+			if Jogo.eventos.has("encapuzado"):
+				_mostrar_dialogo({"texto": Mapas.FALA_ENCAPUZADO_DEPOIS, "nome": "???", "retrato": Mapas.RETRATO_ENCAPUZADO})
+				return
+			_mostrar_dialogo(_falas(Mapas.FALAS_ENCAPUZADO, "???", Mapas.RETRATO_ENCAPUZADO), func():
+				Jogo.eventos["encapuzado"] = true
+				Jogo.itens["chave"] = 1
+				Jogo.ganhar_pedra_solar()
+				_atualizar_hud()
+				_mostrar_dialogo("Você recebeu a Chave das celas e uma Pedra Solar (9 cargas)."))
+		"iselde":
+			_mostrar_dialogo(_falas(Mapas.FALAS_ISELDE, "Iselde", Mapas.RETRATO_ISELDE), func():
+				Jogo.eventos["iselde"] = true
+				Jogo.recrutar("iselde")
+				npc["no"].queue_free()
+				npcs.erase(pos)
+				_atualizar_hud()
+				_mostrar_dialogo("Iselde entrou na party."))
 
 
 func _mover_inimigos() -> void:
@@ -289,29 +485,21 @@ func _mover_inimigos() -> void:
 					_encontro(id)
 					return
 				break
-			if _livre(alvo) and _inimigo_em(alvo) == "" and _tile(alvo) != "X":
+			if _tile(alvo) in PASSAVEIS_INIMIGO and not npcs.has(alvo) and _inimigo_em(alvo) == "":
 				dados["pos"] = alvo
-				_animar_passo(dados, dir)
+				dados["passo"] = (dados["passo"] + 1) % 3
+				_virar(dados["no"], dir, dados["passo"])
 				var tween := create_tween()
 				tween.tween_property(dados["no"], "position", Vector2(alvo * TILE), TEMPO_PASSO * 1.5)
 				break
-
-
-const LINHA_FOLHA := {Vector2i.DOWN: 0, Vector2i.LEFT: 1, Vector2i.RIGHT: 2, Vector2i.UP: 3}
-
-
-func _animar_passo(dados: Dictionary, dir: Vector2i) -> void:
-	var no: Sprite2D = dados["no"]
-	if no.hframes < 3:
-		return
-	dados["passo"] = (dados["passo"] + 1) % 3
-	no.frame = LINHA_FOLHA[dir] * 3 + dados["passo"]
 
 
 func _encontro(id: String) -> void:
 	if tregua > 0.0:
 		return
 	bloqueado = true
+	Jogo.luz_batalha = _luz_aqui()
+	Jogo.fundo_batalha = mapa["fundo_batalha"]
 	var tween := create_tween()
 	tween.tween_property(self, "modulate", Color(1, 0.2, 0.2), 0.25)
 	await tween.finished
@@ -327,4 +515,5 @@ func ao_voltar_da_batalha(id: String, venceu: bool) -> void:
 		inimigos.erase(id)
 	else:
 		tregua = 3.0
+	get_meta("feixes").queue_redraw()
 	_atualizar_hud()

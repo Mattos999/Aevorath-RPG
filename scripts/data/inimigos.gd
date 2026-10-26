@@ -71,4 +71,30 @@ const DADOS := {
 			"pernas": Rect2(44, 150, 116, 86),
 		},
 	},
+	"paladino": {
+		"id": "paladino",
+		"nome": "Paladino do Décimo Dia",
+		"descricao": "Guarda de elite da Igreja. Carrega a luz dos Nove Sóis no peito e o raio na mão.",
+		"hp": 90,
+		"ataque": 15,
+		"defesa": 6,
+		"agilidade": 9,
+		"textura": "res://assets/batalha/paladino.png",
+		"sprite_mapa": "res://assets/sprites/paladino.png",
+		"folha_mapa": true,
+		# Pedras Solares que o paladino carrega para lançar raios no escuro.
+		"cargas_solares": 3,
+		"hp_partes": {"cabeca": 40, "braco_esq": 28, "braco_dir": 28, "pernas": 30},
+		"ataques": [
+			{"nome": "Corte sagrado", "mult": 1.0},
+			{"nome": "Raio do Décimo Dia", "poder": 18, "magia": true, "ignora_esquiva": true, "efeito": "raio"},
+		],
+		"regioes": {
+			"cabeca": Rect2(82, 36, 28, 34),
+			"torso": Rect2(72, 70, 46, 58),
+			"braco_esq": Rect2(118, 60, 56, 50),  # braço do raio
+			"braco_dir": Rect2(28, 62, 44, 62),  # braço da espada
+			"pernas": Rect2(48, 130, 100, 100),
+		},
+	},
 }

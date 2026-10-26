@@ -11,10 +11,19 @@ var falhas := 0
 func _ready() -> void:
 	_testar_mapa()
 	_testar_membros()
+	_testar_luz()
+	# Varia luz, Pedra Solar e tamanho da party para exercitar a regra da magia.
+	var luzes := ["escuro", "sol", "lua"]
 	for aleatorio in [false, true]:
-		for inimigo in ["oco", "cruzado", "sarnheim"]:
+		for inimigo in ["oco", "cruzado", "sarnheim", "paladino"]:
 			for i in 6:
 				Jogo.novo_jogo()
+				if i % 2 == 1:
+					Jogo.recrutar("iselde")
+				if i >= 3:
+					Jogo.ganhar_pedra_solar()
+				Jogo.minutos = 12 * 60 if i % 3 != 2 else 23 * 60
+				Jogo.luz_batalha = luzes[i % 3]
 				await _jogar_batalha(inimigo, aleatorio)
 	print("RESULTADO: %s (%d falhas)" % ["OK" if falhas == 0 else "FALHOU", falhas])
 	get_tree().quit(1 if falhas > 0 else 0)
@@ -27,18 +36,22 @@ func _checar(condicao: bool, mensagem: String) -> void:
 
 
 func _testar_mapa() -> void:
-	var linhas: Array = Mapas.CRIPTA["linhas"]
+	var linhas: Array = Mapas.PRISAO["linhas"]
 	var inicio := Vector2i(-1, -1)
-	var placas := 0
+	var textos := 0
 	for y in linhas.size():
 		_checar(linhas[y].length() == linhas[0].length(), "linha %d com largura diferente" % y)
 		for x in linhas[y].length():
 			if linhas[y][x] == "P":
 				inicio = Vector2i(x, y)
-			if linhas[y][x] == "S":
-				placas += 1
-	_checar(placas == Mapas.CRIPTA["placas"].size(), "número de placas != textos")
-	# Tudo que não é parede precisa ser alcançável a partir do início.
+			if linhas[y][x] in "SK":
+				textos += 1
+	_checar(textos == Mapas.PRISAO["textos"].size(), "número de placas/esqueletos != textos")
+	# Tudo que não é parede precisa ser alcançável a partir do início. Celas
+	# trancadas (D) contam como passagem, porque o encapuzado entrega a chave.
+	# Objetos e NPCs bloqueiam, mas precisam ter um vizinho alcançável.
+	var paredes := "#T|"
+	var bloqueios := "BURQKSAHI"
 	var visitado := {inicio: true}
 	var fila := [inicio]
 	while not fila.is_empty():
@@ -48,16 +61,34 @@ func _testar_mapa() -> void:
 			if visitado.has(n) or n.y < 0 or n.y >= linhas.size() or n.x < 0 or n.x >= linhas[n.y].length():
 				continue
 			var c: String = linhas[n.y][n.x]
-			if c == "#":
+			if c in paredes:
 				continue
 			visitado[n] = true
-			if c != "S" and c != "A":
+			if not (c in bloqueios):
 				fila.append(n)
 	for y in linhas.size():
 		for x in linhas[y].length():
-			if linhas[y][x] != "#":
+			if not (linhas[y][x] in paredes):
 				_checar(visitado.has(Vector2i(x, y)), "tile inalcançável em %s" % Vector2i(x, y))
 	print("mapa ok")
+
+
+func _testar_luz() -> void:
+	Jogo.novo_jogo()
+	_checar(Jogo.forca_magia("escuro") == 0.0, "magia no escuro sem pedra deveria ser 0")
+	Jogo.minutos = 12 * 60
+	_checar(is_equal_approx(Jogo.forca_magia("sol"), 1.5), "sol ao meio-dia deveria dar 150%")
+	Jogo.minutos = 7 * 60
+	_checar(Jogo.forca_magia("sol") < 1.0, "sol de manhã deveria ser mais fraco que ao meio-dia")
+	Jogo.minutos = 22 * 60
+	_checar(Jogo.luz_do_ceu() == "lua", "às 22h a luz do céu deveria ser a lua")
+	Jogo.ganhar_pedra_solar()
+	_checar(Jogo.forca_magia("escuro") > 0.0, "Pedra Solar deveria permitir magia no escuro")
+	var quebrou := false
+	for i in Jogo.CARGAS_PEDRA:
+		quebrou = Jogo.gastar_carga_solar()
+	_checar(quebrou and not Jogo.tem_pedra_solar(), "a pedra deveria quebrar após %d cargas" % Jogo.CARGAS_PEDRA)
+	print("luz ok")
 
 
 func _testar_membros() -> void:
@@ -102,6 +133,7 @@ func _jogar_batalha(inimigo: String, aleatorio: bool) -> void:
 	var membros := []
 	for m in Jogo.party:
 		membros.append("%s %d HP %s" % [m["nome"], m["hp_atual"], m["decepados"]])
-	print("%s vs %s: %s (%d quadros) | %s" % ["aleatório" if aleatorio else "cabeça", inimigo, resultado[0], quadros, ", ".join(membros)])
+	print("%s vs %s [%s, pedra %d]: %s (%d quadros) | %s" % ["aleatório" if aleatorio else "cabeça", inimigo,
+		Jogo.luz_batalha, Jogo.cargas_solares(), resultado[0], quadros, ", ".join(membros)])
 	batalha.queue_free()
 	await get_tree().process_frame

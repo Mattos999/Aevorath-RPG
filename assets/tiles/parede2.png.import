@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://ggyd0tgcukhd"
-path="res://.godot/imported/heroi.png-73bc71dd3c2232dfb41658a3a9c6c9bc.ctex"
+uid="uid://64ho4fy04i3l"
+path="res://.godot/imported/parede2.png-0f46a60ea383900d5cc69fcf8279919c.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/sprites/heroi.png"
-dest_files=["res://.godot/imported/heroi.png-73bc71dd3c2232dfb41658a3a9c6c9bc.ctex"]
+source_file="res://assets/tiles/parede2.png"
+dest_files=["res://.godot/imported/parede2.png-0f46a60ea383900d5cc69fcf8279919c.ctex"]
 
 [params]
 
