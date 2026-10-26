@@ -1,0 +1,43 @@
+name: Testar e exportar .exe
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+env:
+  GODOT_VERSION: 4.3
+
+jobs:
+  exportar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Baixar Godot e templates de exportação
+        run: |
+          URL=https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable
+          curl -sSLo godot.zip $URL/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip
+          unzip -q godot.zip && mv Godot_v${GODOT_VERSION}-stable_linux.x86_64 godot
+          curl -sSLo templates.tpz $URL/Godot_v${GODOT_VERSION}-stable_export_templates.tpz
+          DEST=~/.local/share/godot/export_templates/${GODOT_VERSION}.stable
+          mkdir -p $DEST
+          unzip -q -j templates.tpz templates/windows_release_x86_64.exe templates/windows_debug_x86_64.exe templates/version.txt -d $DEST
+          rm templates.tpz godot.zip
+
+      - name: Importar recursos
+        run: ./godot --headless --import
+
+      - name: Testes automáticos
+        run: ./godot --headless res://tests/teste_auto.tscn
+
+      - name: Exportar para Windows
+        run: |
+          mkdir -p build
+          ./godot --headless --export-release "Windows Desktop" build/Aevorath.exe
+          test -f build/Aevorath.exe
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Aevorath-windows
+          path: build/Aevorath.exe
