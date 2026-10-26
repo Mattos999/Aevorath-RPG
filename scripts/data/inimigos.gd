@@ -48,7 +48,7 @@ const DADOS := {
 	"sarnheim": {
 		"id": "sarnheim",
 		"nome": "Soldado de Sarnheim",
-		"descricao": "Guarda do Reino de Correntes, a serviço da rainha Keith. Armadura pesada, elmo quase impenetrável.",
+		"descricao": "Guarda do Reino de Correntes, a serviço da rainha Keith. Espada, escudo e elmo quase impenetrável.",
 		"hp": 75,
 		"ataque": 17,
 		"defesa": 5,
@@ -59,15 +59,16 @@ const DADOS := {
 		"folha_mapa": true,
 		"hp_partes": {"cabeca": 40, "braco_esq": 26, "braco_dir": 26, "pernas": 30},
 		"ataques": [
-			{"nome": "Golpe de manopla", "mult": 1.0},
+			{"nome": "Corte de espada", "mult": 1.0},
+			{"nome": "Golpe de escudo", "mult": 0.8},
 			{"nome": "Corrente de Sarnheim", "mult": 1.25, "precisao": 0.85},
 		],
 		"regioes": {
-			"cabeca": Rect2(80, 15, 28, 39),
-			"torso": Rect2(66, 54, 58, 66),
-			"braco_esq": Rect2(50, 50, 16, 98),
-			"braco_dir": Rect2(124, 50, 15, 98),
-			"pernas": Rect2(64, 120, 62, 121),
+			"cabeca": Rect2(83, 50, 25, 32),
+			"torso": Rect2(70, 82, 44, 64),
+			"braco_esq": Rect2(114, 64, 50, 86),  # braço do escudo
+			"braco_dir": Rect2(30, 64, 40, 58),  # braço da espada
+			"pernas": Rect2(44, 150, 116, 86),
 		},
 	},
 }
