@@ -26,15 +26,29 @@ jobs:
       - name: Baixar Godot e templates de exportação
         if: steps.cache-godot.outputs.cache-hit != 'true'
         run: |
-          URL=https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable
-          BAIXAR="curl -fsSL --retry 5 --retry-all-errors --retry-delay 5"
-          $BAIXAR -o godot.zip $URL/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip
-          unzip -q godot.zip && mv Godot_v${GODOT_VERSION}-stable_linux.x86_64 godot
-          $BAIXAR -o templates.tpz $URL/Godot_v${GODOT_VERSION}-stable_export_templates.tpz
+          # Tenta os dois repositórios oficiais de builds, com espera crescente,
+          # porque o download de ~1 GB dos templates às vezes falha (504 ou truncado).
+          baixar() {
+            for tentativa in 1 2 3 4 5; do
+              for repo in godot-builds godot; do
+                URL=https://github.com/godotengine/$repo/releases/download/${GODOT_VERSION}-stable/$1
+                if curl -fsSL -o "$1" "$URL" && unzip -tq "$1" >/dev/null; then
+                  return 0
+                fi
+                echo "Falhou: $URL (tentativa $tentativa)"
+              done
+              sleep $((tentativa * 20))
+            done
+            return 1
+          }
+          baixar Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip
+          unzip -q Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip
+          mv Godot_v${GODOT_VERSION}-stable_linux.x86_64 godot
+          baixar Godot_v${GODOT_VERSION}-stable_export_templates.tpz
           DEST=~/.local/share/godot/export_templates/${GODOT_VERSION}.stable
           mkdir -p $DEST
-          unzip -q -j templates.tpz templates/windows_release_x86_64.exe templates/windows_debug_x86_64.exe templates/version.txt -d $DEST
-          rm templates.tpz godot.zip
+          unzip -q -j Godot_v${GODOT_VERSION}-stable_export_templates.tpz templates/windows_release_x86_64.exe templates/windows_debug_x86_64.exe templates/version.txt -d $DEST
+          rm Godot_v${GODOT_VERSION}-stable_export_templates.tpz Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip
 
       - name: Importar recursos
         run: ./godot --headless --import
