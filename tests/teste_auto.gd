@@ -36,7 +36,15 @@ func _checar(condicao: bool, mensagem: String) -> void:
 
 
 func _testar_mapa() -> void:
-	var linhas: Array = Mapas.PRISAO["linhas"]
+	var mapa: MapaCena = preload("res://scenes/mapas/prisao.tscn").instantiate()
+	add_child(mapa)
+	var linhas := mapa.ler_grade()
+	var nao_mapeados := 0
+	for camada in [mapa.terreno, mapa.entidades]:
+		for celula in camada.get_used_cells():
+			if MapaCena._letra(camada, celula) == "":
+				nao_mapeados += 1
+	_checar(nao_mapeados == 0, "%d tiles sem letra no TileSet" % nao_mapeados)
 	var inicio := Vector2i(-1, -1)
 	var textos := 0
 	for y in linhas.size():
@@ -46,12 +54,13 @@ func _testar_mapa() -> void:
 				inicio = Vector2i(x, y)
 			if linhas[y][x] in "SK":
 				textos += 1
-	_checar(textos == Mapas.PRISAO["textos"].size(), "número de placas/esqueletos != textos")
+	_checar(textos == mapa.textos.size(), "número de placas/esqueletos != textos")
+	mapa.queue_free()
 	# Tudo que não é parede precisa ser alcançável a partir do início. Celas
 	# trancadas (D) contam como passagem, porque o encapuzado entrega a chave.
 	# Objetos e NPCs bloqueiam, mas precisam ter um vizinho alcançável.
 	var paredes := "#T|"
-	var bloqueios := "BURQKSAHI"
+	var andaveis := ".,~*dDWXGPCONV"
 	var visitado := {inicio: true}
 	var fila := [inicio]
 	while not fila.is_empty():
@@ -64,7 +73,7 @@ func _testar_mapa() -> void:
 			if c in paredes:
 				continue
 			visitado[n] = true
-			if not (c in bloqueios):
+			if c in andaveis:
 				fila.append(n)
 	for y in linhas.size():
 		for x in linhas[y].length():

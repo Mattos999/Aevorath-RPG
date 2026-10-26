@@ -1,6 +1,7 @@
 extends Node2D
 ## Mapa explorável com movimento em grid de 32x32.
 ## Setas/WASD movem, Z/Espaço/Enter interage com o que está à frente.
+## O mapa vem de uma cena pintada no editor (MapaCena, em scenes/mapas/).
 
 const TILE := 32
 const TEMPO_PASSO := 0.14
@@ -9,14 +10,6 @@ const INTERVALO_INIMIGO := 0.45
 
 const INIMIGO_POR_LETRA := {"C": "cruzado", "O": "oco", "N": "sarnheim", "V": "paladino"}
 
-## Letras que viram textura direta (o resto é tratado em _textura_do_tile).
-const TEXTURA_POR_LETRA := {
-	"T": "parede_tocha", "|": "grade", "D": "cela_fechada", "d": "cela_aberta",
-	"W": "porta", "X": "escada", ",": "sangue", "*": "chao_sol",
-	"B": "cama", "U": "balde", "R": "barril", "Q": "caixa", "A": "altar",
-	"S": "placa", "K": "esqueleto",
-}
-const PAREDES := "#T|D"
 const PASSAVEIS := ".,~*dWXG"
 ## Inimigos não passam por portas nem pela escada.
 const PASSAVEIS_INIMIGO := ".,~*"
@@ -29,13 +22,14 @@ const DIRECOES := {
 }
 const LINHA_FOLHA := {Vector2i.DOWN: 0, Vector2i.LEFT: 1, Vector2i.RIGHT: 2, Vector2i.UP: 3}
 
-var mapa: Dictionary = Mapas.PRISAO
+@export var cena_mapa: PackedScene = preload("res://scenes/mapas/prisao.tscn")
+
+var mapa: MapaCena
 var grade: Array[String] = []
 var textos: Dictionary = {}  # Vector2i -> texto (placas e esqueletos)
 var inimigos: Dictionary = {}  # id -> {no, pos, tipo, passo}
 var npcs: Dictionary = {}  # Vector2i -> {no, id}
 var pedras_no_chao: Dictionary = {}  # Vector2i -> Sprite2D
-var texturas: Dictionary = {}
 
 var jogador: Sprite2D
 var passo_jogador := 0
@@ -62,16 +56,14 @@ func _ready() -> void:
 	_atualizar_hud()
 
 
-func _tex(nome: String) -> Texture2D:
-	if not texturas.has(nome):
-		texturas[nome] = load("res://assets/tiles/%s.png" % nome)
-	return texturas[nome]
-
-
 func _carregar_mapa() -> void:
+	mapa = cena_mapa.instantiate()
+	add_child(mapa)
+	mapa.entidades.visible = false
 	var indice_texto := 0
-	for y in mapa["linhas"].size():
-		var linha: String = mapa["linhas"][y]
+	var linhas := mapa.ler_grade()
+	for y in linhas.size():
+		var linha: String = linhas[y]
 		var limpa := ""
 		for x in linha.length():
 			var c := linha[x]
@@ -81,7 +73,7 @@ func _carregar_mapa() -> void:
 					pos_jogador = pos
 					c = "."
 				"S", "K":
-					textos[pos] = mapa["textos"][indice_texto] if indice_texto < mapa["textos"].size() else "..."
+					textos[pos] = mapa.textos[indice_texto] if indice_texto < mapa.textos.size() else "..."
 					indice_texto += 1
 				"G":
 					if Jogo.eventos.has("pedra_%d_%d" % [x, y]):
@@ -103,6 +95,7 @@ func _carregar_mapa() -> void:
 				"D":
 					if Jogo.eventos.has("porta_%d_%d" % [x, y]):
 						c = "d"
+						mapa.trocar_terreno(pos, "d")
 				"C", "O", "N", "V":
 					var id := "%s_%d_%d" % [c, x, y]
 					if not Jogo.inimigos_derrotados.has(id):
@@ -122,7 +115,6 @@ func _carregar_mapa() -> void:
 	camera.limit_bottom = grade.size() * TILE
 	camera.position_smoothing_enabled = true
 	jogador.add_child(camera)
-	queue_redraw()
 
 
 func _sprite_de_folha(caminho: String, pos: Vector2i) -> Sprite2D:
@@ -161,28 +153,6 @@ func _criar_feixes() -> void:
 					feixes.draw_rect(Rect2(x * TILE + 4, (y - 1) * TILE, TILE - 8, TILE * 2), cor))
 	add_child(feixes)
 	set_meta("feixes", feixes)
-
-
-func _textura_do_tile(x: int, y: int) -> Texture2D:
-	var c := grade[y][x]
-	var variacao := (x * 7 + y * 13) % 5
-	match c:
-		"#":
-			var abaixo := _tile(Vector2i(x, y + 1))
-			if abaixo in PAREDES:
-				return _tex("parede_topo")
-			return _tex("parede2" if variacao == 0 else "parede")
-		".", "G":
-			return _tex("chao2" if variacao == 0 else "chao")
-		"~":
-			return _tex(["chao_rachado", "chao_rachado2", "chao_rachado3"][variacao % 3])
-	return _tex(TEXTURA_POR_LETRA.get(c, "chao"))
-
-
-func _draw() -> void:
-	for y in grade.size():
-		for x in grade[y].length():
-			draw_texture(_textura_do_tile(x, y), Vector2(x * TILE, y * TILE))
 
 
 # ---------------------------------------------------------------- Interface
@@ -242,7 +212,7 @@ static func _estilo_painel(cor: Color) -> StyleBoxFlat:
 
 
 func _luz_aqui() -> String:
-	if mapa["luz"] == "aberto" or _tile(pos_jogador) == "*":
+	if mapa.luz == "aberto" or _tile(pos_jogador) == "*":
 		return Jogo.luz_do_ceu()
 	return "escuro"
 
@@ -250,7 +220,7 @@ func _luz_aqui() -> String:
 func _atualizar_hud() -> void:
 	var nomes_luz := {"sol": "Sob o sol", "lua": "Sob a lua", "escuro": "Escuro"}
 	var luz := _luz_aqui()
-	var linhas := [mapa["nome"], "%s  |  %s" % [Jogo.texto_relogio(), nomes_luz[luz]]]
+	var linhas := [mapa.nome, "%s  |  %s" % [Jogo.texto_relogio(), nomes_luz[luz]]]
 	if luz != "escuro":
 		linhas[1] += " (magia %d%%)" % roundi(Jogo.forca_magia(luz) * 100)
 	for membro in Jogo.party:
@@ -353,7 +323,6 @@ func _tile(pos: Vector2i) -> String:
 func _trocar_tile(pos: Vector2i, c: String) -> void:
 	var linha := grade[pos.y]
 	grade[pos.y] = linha.substr(0, pos.x) + c + linha.substr(pos.x + 1)
-	queue_redraw()
 
 
 func _livre(pos: Vector2i) -> bool:
@@ -430,6 +399,7 @@ func _interagir() -> void:
 				if Jogo.itens.get("chave", 0) > 0:
 					Jogo.eventos["porta_%d_%d" % [alvo.x, alvo.y]] = true
 					_trocar_tile(alvo, "d")
+					mapa.trocar_terreno(alvo, "d")
 					_mostrar_dialogo("A chave gira com um rangido. A cela se abre.")
 				else:
 					_mostrar_dialogo("A porta da cela está trancada.")
@@ -499,7 +469,7 @@ func _encontro(id: String) -> void:
 		return
 	bloqueado = true
 	Jogo.luz_batalha = _luz_aqui()
-	Jogo.fundo_batalha = mapa["fundo_batalha"]
+	Jogo.fundo_batalha = mapa.fundo_batalha
 	var tween := create_tween()
 	tween.tween_property(self, "modulate", Color(1, 0.2, 0.2), 0.25)
 	await tween.finished

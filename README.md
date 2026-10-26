@@ -60,7 +60,8 @@ tests/             teste automático headless
 
 ## Editando
 
-- **Mapas:** `scripts/mundo/mapas.gd`, desenhados com caracteres (legenda no arquivo).
+- **Mapas:** veja "Pintando o mapa no Godot" abaixo. Falas e retratos ficam em
+  `scripts/mundo/mapas.gd`.
 - **Inimigos:** `scripts/data/inimigos.gd`. As `regioes` são os retângulos de
   cada membro na imagem de batalha; ajuste se trocar a arte.
 - **Arte:** coloque a imagem nova em `arte_original/` e rode
@@ -70,3 +71,28 @@ tests/             teste automático headless
 - **Testes:** `godot --headless res://tests/teste_auto.tscn`.
 - **Exportar local:** instale os templates de exportação do Godot 4.3 e rode
   `godot --headless --export-release "Windows Desktop" build/Aevorath.exe`.
+
+## Pintando o mapa no Godot
+
+1. Abra o projeto no Godot 4.3 e clique em **2D** no topo da tela.
+2. No painel FileSystem, abra `scenes/mapas/prisao.tscn` (dois cliques).
+3. Na árvore da cena, clique em **Terreno**. O painel **TileMap** abre embaixo,
+   com a paleta dos tiles: chão, paredes, celas, objetos e feixes de luz.
+4. Escolha um tile e pinte com o botão esquerdo do mouse. O botão direito apaga.
+5. Para mover o jogador, NPCs, inimigos ou a Pedra Solar, clique em
+   **Entidades** e pinte a peça onde ela deve começar (apague a antiga).
+   Essa camada some quando o jogo roda; no lugar dela aparecem os personagens.
+6. Clique em **Prisao** (a raiz da cena) para mudar, no Inspector, o nome do
+   mapa, a luz ("escuro" ou "aberto"), o fundo de batalha e os **Textos**
+   das placas e esqueletos (na ordem em que aparecem lendo o mapa linha a linha).
+7. Salve com Ctrl+S e aperte F5 para jogar.
+
+Regras: pinte a partir do canto de cima à esquerda (célula 0, 0). Célula vazia
+conta como parede. O que cada tile faz no jogo vem do dado `letra` no TileSet
+(`assets/tiles/tileset.tres`); a legenda está em `scripts/mundo/mapa_cena.gd`.
+Para criar outro mapa, duplique `prisao.tscn` e troque `cena_mapa` em
+`scripts/mundo/mundo.gd`.
+
+Tiles novos: coloque o PNG de 32x32 em `assets/tiles/`, acrescente no fim da
+lista em `tools/montar_atlas.py` e rode `python3 tools/montar_atlas.py` e
+`godot --headless -s res://tools/gerar_tileset.gd`.

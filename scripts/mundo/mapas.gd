@@ -1,45 +1,6 @@
 class_name Mapas
-## Mapas em texto. Legenda:
-##   #  parede          T  parede com tocha    |  grade de cela
-##   D  cela trancada   d  cela aberta         W  porta de madeira
-##   .  chão            ,  sangue              ~  chão rachado
-##   *  feixe de luz (sol de dia, lua à noite: magia funciona aqui)
-##   B  cama   U  balde   R  barril   Q  caixa   (objetos, bloqueiam)
-##   A  Altar dos Nove Sóis (descanso)
-##   S  placa   K  esqueleto   (textos, na ordem em que aparecem lendo linha a linha)
-##   G  Pedra Solar no chão
-##   P  início do jogador
-##   H  o encapuzado (NPC)   I  Iselde presa (entra na party)
-##   C  Cruzado   O  Fiel Oco   N  Soldado de Sarnheim   V  Paladino
-##   X  escada (fim da demo)
-##
-## "luz": "escuro" para masmorras, "aberto" para lugares sob o céu.
-
-const PRISAO := {
-	"nome": "Prisão da Igreja do Décimo Dia",
-	"luz": "escuro",
-	"fundo_batalha": "res://assets/batalha/fundo_prisao.png",
-	"linhas": [
-		"##############################",
-		"#B..#.K..#B..#.....#..RQ...VX#",
-		"#.P.#..G.#.I.#..*..#........##",
-		"#H..#..,.#...#.***.#....N...##",
-		"##D###D###|D|##.*.###.####.###",
-		"T...........~.......,........T",
-		"#.....O...........*..........#",
-		"#..~......,........C.........#",
-		"###W#######.######.#####.#####",
-		"#S....A..#....~.#..U..#.....R#",
-		"#........W......#.....W..*..Q#",
-		"#..,.....#...,..#.K...#.....R#",
-		"##############################",
-	],
-	"textos": [
-		"Ossos de um prisioneiro antigo. Entre as costelas, algo brilha em laranja.",
-		"\"No Décimo Dia, os Nove Sóis julgarão os impuros.\nCem serão entregues, para que mil sejam poupados.\"\n— Inscrição da Igreja do Décimo Dia",
-		"Restos de um Marcado. Nas paredes, marcas de contagem:\n97 ciclos riscados. E um novo, recém-começado.",
-	],
-}
+## Falas e retratos usados nos mapas. Os mapas em si são cenas pintadas no
+## editor, em scenes/mapas/ (veja scripts/mundo/mapa_cena.gd).
 
 const RETRATO_ENCAPUZADO := "res://assets/batalha/retrato_encapuzado.png"
 const RETRATO_ISELDE := "res://assets/batalha/retrato_protagonista2.png"
