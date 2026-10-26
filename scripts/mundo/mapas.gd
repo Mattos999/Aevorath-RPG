@@ -3,7 +3,8 @@ class_name Mapas
 ##   #  parede        .  chão          ,  sangue (chão)
 ##   P  início        A  Altar dos Nove Sóis (descanso)
 ##   S  placa/texto (na ordem em que aparecem, lendo linha a linha)
-##   C  Cruzado       O  Fiel Oco      X  saída (fim da demo)
+##   C  Cruzado       O  Fiel Oco      N  Soldado de Sarnheim
+##   X  saída (fim da demo)
 
 const CRIPTA := {
 	"nome": "Cripta da Igreja do Décimo Dia",
@@ -15,7 +16,7 @@ const CRIPTA := {
 		"#.S..###.#######...........#...C...#",
 		"#..........,.........###...#.......#",
 		"#....###.######......#A#...###.#####",
-		"#....#.........#.....#.#...........#",
+		"#....#.........#.....#.#.........N.#",
 		"###.##....C....#...........,.......#",
 		"#....#.........#####.###########.###",
 		"#..,.#....S....#.................O.#",

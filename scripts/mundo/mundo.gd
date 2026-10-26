@@ -15,6 +15,8 @@ const TEX_PLACA := preload("res://assets/tiles/placa.png")
 const TEX_SAIDA := preload("res://assets/tiles/saida.png")
 const TEX_HEROI := preload("res://assets/sprites/heroi.png")
 
+const INIMIGO_POR_LETRA := {"C": "cruzado", "O": "oco", "N": "sarnheim"}
+
 const DIRECOES := {
 	"mover_cima": Vector2i.UP,
 	"mover_baixo": Vector2i.DOWN,
@@ -61,10 +63,10 @@ func _carregar_mapa() -> void:
 				"S":
 					placas[pos] = mapa["placas"][indice_placa] if indice_placa < mapa["placas"].size() else "..."
 					indice_placa += 1
-				"C", "O":
+				"C", "O", "N":
 					var id := "%s_%d_%d" % [c, x, y]
 					if not Jogo.inimigos_derrotados.has(id):
-						_criar_inimigo(id, "cruzado" if c == "C" else "oco", pos)
+						_criar_inimigo(id, INIMIGO_POR_LETRA[c], pos)
 					c = "."
 			limpa += c
 		grade.append(limpa)
@@ -93,8 +95,11 @@ func _criar_inimigo(id: String, tipo: String, pos: Vector2i) -> void:
 	no.centered = false
 	no.position = Vector2(pos * TILE)
 	no.z_index = 1
+	if Inimigos.DADOS[tipo].get("folha_mapa", false):
+		no.hframes = 3
+		no.vframes = 4
 	add_child(no)
-	inimigos[id] = {"no": no, "pos": pos, "tipo": tipo}
+	inimigos[id] = {"no": no, "pos": pos, "tipo": tipo, "passo": 0}
 
 
 func _draw() -> void:
@@ -286,9 +291,21 @@ func _mover_inimigos() -> void:
 				break
 			if _livre(alvo) and _inimigo_em(alvo) == "" and _tile(alvo) != "X":
 				dados["pos"] = alvo
+				_animar_passo(dados, dir)
 				var tween := create_tween()
 				tween.tween_property(dados["no"], "position", Vector2(alvo * TILE), TEMPO_PASSO * 1.5)
 				break
+
+
+const LINHA_FOLHA := {Vector2i.DOWN: 0, Vector2i.LEFT: 1, Vector2i.RIGHT: 2, Vector2i.UP: 3}
+
+
+func _animar_passo(dados: Dictionary, dir: Vector2i) -> void:
+	var no: Sprite2D = dados["no"]
+	if no.hframes < 3:
+		return
+	dados["passo"] = (dados["passo"] + 1) % 3
+	no.frame = LINHA_FOLHA[dir] * 3 + dados["passo"]
 
 
 func _encontro(id: String) -> void:

@@ -30,7 +30,7 @@ Controles:
 - **Party** com Iselde (Marcada/Mydrani, magia) e Doran (Cruzado desertor).
   Dano e membros perdidos continuam depois da batalha. O altar cura HP/MP,
   mas o que foi perdido não volta.
-- **Inimigos**: Cruzado do Décimo Dia e Fiel Oco.
+- **Inimigos**: Cruzado do Décimo Dia, Fiel Oco e Soldado de Sarnheim (arte do Carlos na batalha).
 
 ## Estrutura
 

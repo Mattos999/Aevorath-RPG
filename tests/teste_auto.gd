@@ -12,7 +12,7 @@ func _ready() -> void:
 	_testar_mapa()
 	_testar_membros()
 	for aleatorio in [false, true]:
-		for inimigo in ["oco", "cruzado"]:
+		for inimigo in ["oco", "cruzado", "sarnheim"]:
 			for i in 6:
 				Jogo.novo_jogo()
 				await _jogar_batalha(inimigo, aleatorio)

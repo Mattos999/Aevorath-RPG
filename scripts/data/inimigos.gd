@@ -45,4 +45,29 @@ const DADOS := {
 		],
 		"regioes": REGIOES_HUMANOIDE,
 	},
+	"sarnheim": {
+		"id": "sarnheim",
+		"nome": "Soldado de Sarnheim",
+		"descricao": "Guarda do Reino de Correntes, a serviço da rainha Keith. Armadura pesada, elmo quase impenetrável.",
+		"hp": 75,
+		"ataque": 17,
+		"defesa": 5,
+		"agilidade": 6,
+		"textura": "res://assets/batalha/sarnheim.png",
+		"sprite_mapa": "res://assets/sprites/sarnheim.png",
+		# Folha 3x4 de 32x32: colunas = passos; linhas = baixo, esquerda, direita, cima.
+		"folha_mapa": true,
+		"hp_partes": {"cabeca": 40, "braco_esq": 26, "braco_dir": 26, "pernas": 30},
+		"ataques": [
+			{"nome": "Golpe de manopla", "mult": 1.0},
+			{"nome": "Corrente de Sarnheim", "mult": 1.25, "precisao": 0.85},
+		],
+		"regioes": {
+			"cabeca": Rect2(80, 15, 28, 39),
+			"torso": Rect2(66, 54, 58, 66),
+			"braco_esq": Rect2(50, 50, 16, 98),
+			"braco_dir": Rect2(124, 50, 15, 98),
+			"pernas": Rect2(64, 120, 62, 121),
+		},
+	},
 }
