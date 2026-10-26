@@ -14,12 +14,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Cache do Godot e templates
+        id: cache-godot
+        uses: actions/cache@v4
+        with:
+          path: |
+            godot
+            ~/.local/share/godot/export_templates
+          key: godot-${{ env.GODOT_VERSION }}-windows
+
       - name: Baixar Godot e templates de exportação
+        if: steps.cache-godot.outputs.cache-hit != 'true'
         run: |
           URL=https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable
-          curl -sSLo godot.zip $URL/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip
+          BAIXAR="curl -fsSL --retry 5 --retry-all-errors --retry-delay 5"
+          $BAIXAR -o godot.zip $URL/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip
           unzip -q godot.zip && mv Godot_v${GODOT_VERSION}-stable_linux.x86_64 godot
-          curl -sSLo templates.tpz $URL/Godot_v${GODOT_VERSION}-stable_export_templates.tpz
+          $BAIXAR -o templates.tpz $URL/Godot_v${GODOT_VERSION}-stable_export_templates.tpz
           DEST=~/.local/share/godot/export_templates/${GODOT_VERSION}.stable
           mkdir -p $DEST
           unzip -q -j templates.tpz templates/windows_release_x86_64.exe templates/windows_debug_x86_64.exe templates/version.txt -d $DEST
