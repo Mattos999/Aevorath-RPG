@@ -8,6 +8,10 @@ extends RefCounted
 ## - Braços: decepar o braço da arma corta o ataque; sem os dois, só chutes.
 ## - Pernas: decepadas = não esquiva, age por último e não consegue fugir.
 ## - Todo membro decepado causa sangramento até ser tratado.
+##
+## Dano de um golpe = força (ataque) + base da técnica + dano da arma, com
+## penalidade por braços perdidos. Defesa reduz o dano em %; defendendo
+## (Bloqueio) ganha +2 de defesa e corta o resto pela metade.
 
 const PARTES := ["cabeca", "torso", "braco_esq", "braco_dir", "pernas"]
 
@@ -38,6 +42,15 @@ const DANO_NO_CORPO := {
 }
 
 const SANGRAMENTO_POR_MEMBRO := 3
+## Golpe desarmado: dano base de quem ataca sem arma.
+const DANO_DESARMADO := 5
+const DEFESA_BLOQUEIO := 2
+const DEFESA_MAXIMA := 80
+
+const NOME_ESTADO := {
+	"veneno": "Envenenado", "paralisia": "Paralisado", "medo": "Aterrorizado",
+	"encantado": "Encantado", "regeneracao": "Regenerando", "forca": "Ataque +",
+}
 
 var id: String
 var nome: String
@@ -46,9 +59,17 @@ var hp_max: int
 var hp: int
 var mp_max: int
 var mp: int
-var ataque: int
-var defesa: int
+var ataque: int  # força
+var defesa: int  # em %, já somando os equipamentos
 var agilidade: int
+## Equipamento (só da party): slot -> id do item.
+var equipamento: Dictionary = {}
+var dano_arma := 0
+var tipo_arma := ""
+var efeitos_equip: Array = []
+## Efeitos que duram a batalha: nome -> {turnos (-1 = até o fim), valor}.
+var estados: Dictionary = {}
+var colar_usado := false
 var textura: String
 ## Habilidades disponíveis (ids em Habilidades.DADOS).
 var habilidades: Array = []
@@ -76,6 +97,16 @@ static func criar(dados: Dictionary, jogador: bool) -> Combatente:
 	c.ataque = dados["ataque"]
 	c.defesa = dados["defesa"]
 	c.agilidade = dados["agilidade"]
+	c.equipamento = dados.get("equipamento", {}).duplicate()
+	for slot in c.equipamento:
+		var item: Dictionary = Itens.DADOS.get(c.equipamento[slot], {})
+		c.dano_arma += item.get("dano", 0)
+		c.defesa += item.get("defesa", 0)
+		c.agilidade += item.get("mobilidade", 0)
+		if item.has("tipo_arma"):
+			c.tipo_arma = item["tipo_arma"]
+		if item.has("efeito"):
+			c.efeitos_equip.append(item["efeito"])
 	c.textura = dados.get("textura", "")
 	c.habilidades = dados.get("habilidades", []).duplicate()
 	c.ataques = dados.get("ataques", [{"nome": "Golpe", "mult": 1.0}]).duplicate(true)
@@ -118,13 +149,38 @@ func pode_atacar_com_arma() -> bool:
 	return not decepado("braco_dir") or not decepado("braco_esq")
 
 
+func tem_arma() -> bool:
+	return dano_arma > 0 or tipo_arma != ""
+
+
+func tem_efeito(efeito: String) -> bool:
+	return efeito in efeitos_equip
+
+
 func ataque_efetivo() -> int:
-	var valor := float(ataque)
+	return maxi(1, roundi(ataque * _penalidade_bracos()))
+
+
+func _penalidade_bracos() -> float:
 	if decepado("braco_dir"):
-		valor *= 0.4 if decepado("braco_esq") else 0.6
+		return 0.4 if decepado("braco_esq") else 0.6
 	elif decepado("braco_esq"):
-		valor *= 0.85
-	return maxi(1, int(valor))
+		return 0.85
+	return 1.0
+
+
+## Dano bruto de um golpe: força + base + arma, com penalidades e bônus.
+## Quem ataca sem arma (ou sem braços) usa o golpe desarmado.
+func poder_golpe(base := 0, com_arma := true) -> int:
+	var valor := float(ataque + base)
+	if com_arma and tem_arma() and pode_atacar_com_arma():
+		valor += dano_arma
+	elif eh_jogador and base == 0:
+		valor += DANO_DESARMADO
+	valor *= _penalidade_bracos()
+	if estados.has("forca"):
+		valor *= 1.0 + estados["forca"]["valor"] / 100.0
+	return maxi(1, roundi(valor))
 
 
 func agilidade_efetiva() -> int:
@@ -152,7 +208,8 @@ func receber_golpe(parte: String, dano_bruto: int, rng: RandomNumberGenerator, p
 	if rng.randf() > chance:
 		return resultado
 	resultado["acertou"] = true
-	var dano := maxi(1, dano_bruto - defesa)
+	var reducao := defesa + (DEFESA_BLOQUEIO if defendendo else 0)
+	var dano := maxi(1, roundi(dano_bruto * (1.0 - mini(reducao, DEFESA_MAXIMA) / 100.0)))
 	if defendendo:
 		dano = maxi(1, dano / 2)
 	resultado["dano"] = dano
@@ -185,6 +242,32 @@ func curar(valor: int) -> int:
 	var antes := hp
 	hp = mini(hp_max, hp + valor)
 	return hp - antes
+
+
+func descricao_estados() -> String:
+	var nomes := []
+	for e in estados:
+		var t: int = estados[e]["turnos"]
+		nomes.append(NOME_ESTADO.get(e, e) + (" %d" % t if t > 0 else ""))
+	return ", ".join(nomes)
+
+
+## Estado da batalha deste lutador, para Retroceder.
+func foto() -> Dictionary:
+	return {"hp": hp, "mp": mp, "partes": partes.duplicate(true), "sangrando": sangrando,
+		"estados": estados.duplicate(true), "defendendo": defendendo, "cargas": cargas_solares,
+		"colar": colar_usado}
+
+
+func restaurar(f: Dictionary) -> void:
+	hp = f["hp"]
+	mp = f["mp"]
+	partes = f["partes"].duplicate(true)
+	sangrando = f["sangrando"]
+	estados = f["estados"].duplicate(true)
+	defendendo = f["defendendo"]
+	cargas_solares = f["cargas"]
+	colar_usado = f["colar"]
 
 
 func descricao_membros() -> String:

@@ -14,28 +14,35 @@ const PERSONAGENS := {
 		"id": "aren",
 		"nome": "Aren",
 		"titulo": "Prisioneiro",
+		"classe": "Guerreiro",
+		"sol": "",
 		"hp": 65,
 		"mp": 10,
-		"ataque": 12,
-		"defesa": 2,
+		"ataque": 8,
+		"defesa": 0,
 		"agilidade": 9,
 		"textura": "res://assets/batalha/retrato_protagonista.png",
 		"folha_mapa": "res://assets/sprites/protagonista.png",
-		"habilidades": ["golpe_brutal", "proteger"],
+		"habilidades": ["corte_preciso", "golpe_destruidor"],
+		"equipamento": {"arma": "espada_enferrujada", "corpo": "panos_velhos", "pes": "calcados_velhos"},
 		"hp_partes": {"cabeca": 20, "braco_esq": 22, "braco_dir": 22, "pernas": 24},
 	},
 	"iselde": {
 		"id": "iselde",
 		"nome": "Iselde",
 		"titulo": "Marcada (Mydrani)",
+		"classe": "Maga",
+		# O Sol que ela segue define as magias (veja Habilidades.MAGIAS_POR_SOL).
+		"sol": "vida",
 		"hp": 50,
 		"mp": 20,
-		"ataque": 9,
-		"defesa": 1,
+		"ataque": 5,
+		"defesa": 0,
 		"agilidade": 12,
 		"textura": "res://assets/batalha/retrato_protagonista2.png",
 		"folha_mapa": "res://assets/sprites/protagonista2.png",
-		"habilidades": ["lampejo", "sigilo_vida"],
+		"habilidades": ["bencao_vaelora", "regeneracao"],
+		"equipamento": {"corpo": "panos_velhos", "pes": "calcados_velhos"},
 		"hp_partes": {"cabeca": 16, "braco_esq": 18, "braco_dir": 18, "pernas": 20},
 	},
 }
@@ -45,7 +52,10 @@ const MINUTOS_POR_PASSO := 2
 const HORA_INICIAL := 7
 
 var party: Array = []
+## Consumíveis e chaves: id -> quantidade.
 var itens: Dictionary = {}
+## Equipamentos guardados (não equipados).
+var inventario: Array[String] = []
 ## Cargas de cada Pedra Solar carregada (uma entrada por pedra).
 var pedras_solares: Array[int] = []
 var inimigos_derrotados: Dictionary = {}
@@ -65,6 +75,8 @@ func _ready() -> void:
 func novo_jogo() -> void:
 	party = [PERSONAGENS["aren"].duplicate(true)]
 	itens = {"bandagem": 2}
+	# Provisório, para testar o inventário até os itens estarem no mapa.
+	inventario.assign(["espada_prata", "machado_guerra", "armadura_couro", "bota_couro", "colar_sol", "brinco_lebre"])
 	pedras_solares.clear()
 	inimigos_derrotados.clear()
 	eventos.clear()
@@ -99,6 +111,54 @@ func descansar() -> void:
 
 func pedir_batalha(inimigo_id: String, id_no_mapa: String) -> void:
 	batalha_pedida.emit(inimigo_id, id_no_mapa)
+
+
+# ---------------------------------------------------------------- Equipamento
+
+## Equipa um item do inventário em `membro`. O que estava no slot volta para
+## o inventário. Retorna false se o item não cabe no slot.
+func equipar(membro: Dictionary, item_id: String, slot := "") -> bool:
+	if slot == "":
+		slot = slot_livre(membro, item_id)
+	if slot == "" or not Itens.cabe_no_slot(item_id, slot) or not item_id in inventario:
+		return false
+	inventario.erase(item_id)
+	var eq: Dictionary = membro.get_or_add("equipamento", {})
+	if eq.get(slot, "") != "":
+		inventario.append(eq[slot])
+	eq[slot] = item_id
+	return true
+
+
+func desequipar(membro: Dictionary, slot: String) -> void:
+	var eq: Dictionary = membro.get_or_add("equipamento", {})
+	if eq.get(slot, "") != "":
+		inventario.append(eq[slot])
+		eq.erase(slot)
+
+
+## Slot para um item: o primeiro vazio que serve, ou o primeiro que serve.
+func slot_livre(membro: Dictionary, item_id: String) -> String:
+	var eq: Dictionary = membro.get("equipamento", {})
+	var primeiro := ""
+	for slot in Itens.SLOTS:
+		if Itens.cabe_no_slot(item_id, slot):
+			if eq.get(slot, "") == "":
+				return slot
+			if primeiro == "":
+				primeiro = slot
+	return primeiro
+
+
+## Usa um consumível fora da batalha. Retorna o texto do que aconteceu.
+func usar_item(membro: Dictionary, item_id: String) -> String:
+	if itens.get(item_id, 0) <= 0 or membro.get("hp_atual", membro["hp"]) <= 0:
+		return ""
+	itens[item_id] -= 1
+	var antes: int = membro.get("hp_atual", membro["hp"])
+	membro["hp_atual"] = mini(membro["hp"], antes + Itens.DADOS[item_id].get("cura", 0))
+	membro["sangrando"] = false
+	return "%s recupera %d HP." % [membro["nome"], membro["hp_atual"] - antes]
 
 
 # ---------------------------------------------------------------- Relógio e luz

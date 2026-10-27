@@ -211,6 +211,14 @@ def folhas_de_mapa():
     q = recortar_quadros(img, preencher_de_fora(fundo_xadrez_claro(np.array(img))), 4, 3)
     salvar(montar_folha(q, [[(r, i, False) for i in range(3)] for r in range(4)]), "sprites/encapuzado.png")
 
+    # Cruzado: no lado, o 3º quadro da linha 2 olha para a direita, e na última
+    # linha o 1º quadro é de frente. Esquerda usa só os quadros que olham para a
+    # esquerda; a direita é espelhada.
+    q = quadros_sem_grade("cruzado_folha.jpg")
+    esquerda = [(1, 0, False), (1, 1, False), (2, 0, False)]
+    salvar(montar_folha(q, [frente, esquerda, [(r, c, True) for r, c, _ in esquerda],
+        [(3, 1, False), (3, 2, False), (3, 1, True)]]), "sprites/cruzado.png")
+
     # Paladino: na última linha só os quadros 2 e 3 são de costas.
     img = abrir("paladino_folha.jpg")
     q = recortar_quadros(img, preencher_de_fora(fundo_cinza_escuro(np.array(img))), 4, 3)

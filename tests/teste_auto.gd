@@ -12,6 +12,8 @@ func _ready() -> void:
 	_testar_mapa()
 	_testar_membros()
 	_testar_luz()
+	_testar_equipamento()
+	await _testar_menu()
 	# Varia luz, Pedra Solar e tamanho da party para exercitar a regra da magia.
 	var luzes := ["escuro", "sol", "lua"]
 	for aleatorio in [false, true]:
@@ -24,6 +26,8 @@ func _ready() -> void:
 					Jogo.ganhar_pedra_solar()
 				Jogo.minutos = 12 * 60 if i % 3 != 2 else 23 * 60
 				Jogo.luz_batalha = luzes[i % 3]
+				if aleatorio and i % 2 == 1:
+					_party_de_teste()
 				await _jogar_batalha(inimigo, aleatorio)
 	print("RESULTADO: %s (%d falhas)" % ["OK" if falhas == 0 else "FALHOU", falhas])
 	get_tree().quit(1 if falhas > 0 else 0)
@@ -116,6 +120,76 @@ func _testar_membros() -> void:
 	e.receber_golpe("cabeca", 999, rng, 1.0, true)
 	_checar(not e.vivo(), "cabeça decepada deve matar")
 	print("membros ok")
+
+
+## Dá à party todas as habilidades e equipamentos com efeito, para as
+## batalhas aleatórias exercitarem estados, Retroceder, brinco e colar.
+func _party_de_teste() -> void:
+	var todas := Habilidades.DADOS.keys()
+	for membro in Jogo.party:
+		membro["habilidades"] = todas
+		membro["mp"] = 60
+	Jogo.equipar(Jogo.party[0], "brinco_lebre")
+	Jogo.equipar(Jogo.party[1], "colar_sol")
+
+
+func _testar_equipamento() -> void:
+	Jogo.novo_jogo()
+	var aren: Dictionary = Jogo.party[0]
+	var antes := Combatente.criar(aren, true)
+	_checar(antes.dano_arma == 2 and antes.tipo_arma == "espada", "Aren deveria começar com a espada enferrujada")
+	_checar(Jogo.equipar(aren, "espada_prata"), "equipar espada de prata falhou")
+	_checar("espada_enferrujada" in Jogo.inventario, "a arma antiga deveria voltar ao inventário")
+	_checar(not Jogo.equipar(aren, "armadura_couro", "arma"), "armadura não pode ir no slot de arma")
+	Jogo.equipar(aren, "armadura_couro")
+	Jogo.equipar(aren, "bota_couro")
+	var depois := Combatente.criar(aren, true)
+	_checar(depois.dano_arma == 5 and depois.defesa == 12 and depois.agilidade == antes.agilidade + 1, "bônus de equipamento errados")
+	_checar(depois.poder_golpe() > antes.poder_golpe(), "arma melhor deveria dar mais dano")
+	var rng := RandomNumberGenerator.new()
+	var r := depois.receber_golpe("torso", 100, rng, 1.0, true)
+	_checar(r["dano"] == 88, "defesa 12%% deveria cortar 12%% do dano (veio %d)" % r["dano"])
+	Jogo.desequipar(aren, "arma")
+	var sem_arma := Combatente.criar(aren, true)
+	_checar(not sem_arma.tem_arma() and sem_arma.poder_golpe() == aren["ataque"] + Combatente.DANO_DESARMADO, "golpe desarmado = força + 5")
+	_checar(Habilidades.impedimento("corte_preciso", sem_arma) != "", "Corte preciso deveria pedir espada")
+	Jogo.equipar(aren, "machado_guerra")
+	var machado := Combatente.criar(aren, true)
+	_checar(Habilidades.impedimento("corte_preciso", machado) != "" and Habilidades.impedimento("golpe_destruidor", machado) == "",
+		"machado: sem Corte preciso, com Golpe destruidor")
+	_checar(Jogo.equipar(aren, "colar_sol") and Jogo.equipar(aren, "brinco_lebre"), "acessórios deveriam caber")
+	_checar(aren["equipamento"].get("acessorio1", "") != "" and aren["equipamento"].get("acessorio2", "") != "", "dois acessórios em slots diferentes")
+	print("equipamento ok")
+
+
+func _testar_menu() -> void:
+	Jogo.novo_jogo()
+	var menu := MenuJogo.new()
+	add_child(menu)
+	await get_tree().process_frame
+	_checar(menu.grade_itens.get_child_count() > 0, "inventário do menu vazio")
+	# Arrastar e soltar: item no slot, depois o slot de volta na lista.
+	var slot_arma: Button = null
+	for linha in menu.coluna_slots.get_children():
+		for filho in linha.get_children():
+			if filho is Button and filho.get_meta("slot", "") == "arma":
+				slot_arma = filho
+	_checar(slot_arma != null, "slot de arma não encontrado")
+	menu._equipar("espada_prata", "arma")
+	_checar(Jogo.party[0]["equipamento"]["arma"] == "espada_prata", "equipar pelo menu falhou")
+	menu._desequipar("arma")
+	_checar(not Jogo.party[0]["equipamento"].has("arma"), "desequipar pelo menu falhou")
+	menu._selecionar("item:bandagem")
+	Jogo.party[0]["hp_atual"] = 30
+	menu._usar_selecionado()
+	_checar(Jogo.party[0]["hp_atual"] == 40 and Jogo.itens["bandagem"] == 1, "usar bandagem pelo menu falhou")
+	for aba in 3:
+		menu.abas.current_tab = aba
+		await get_tree().process_frame
+	_checar(menu.texto_magias.text.contains("Atacar") and menu.texto_atributos.text.contains("Defesa"), "abas sem conteúdo")
+	menu.fechar_menu()
+	await get_tree().process_frame
+	print("menu ok")
 
 
 ## Escolhe a primeira opção habilitada (Atacar -> cabeça) ou, com `aleatorio`,

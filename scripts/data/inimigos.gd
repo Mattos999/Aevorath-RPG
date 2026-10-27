@@ -1,6 +1,7 @@
 class_name Inimigos
 ## Dados dos inimigos. As regiões são retângulos (em pixels) na textura de
 ## batalha de cada inimigo e definem onde o jogador mira cada membro.
+## "defesa" é a % de dano que a armadura corta.
 
 const DADOS := {
 	"cruzado": {
@@ -9,10 +10,11 @@ const DADOS := {
 		"descricao": "Soldado da Igreja do Décimo Dia. Caça Marcados para o Ritual do Meio.",
 		"hp": 60,
 		"ataque": 16,
-		"defesa": 3,
+		"defesa": 15,
 		"agilidade": 8,
 		"textura": "res://assets/batalha/cruzado.png",
 		"sprite_mapa": "res://assets/sprites/cruzado.png",
+		"folha_mapa": true,
 		"hp_partes": {"cabeca": 32, "braco_esq": 22, "braco_dir": 22, "pernas": 26},
 		"ataques": [
 			{"nome": "Golpe de espada", "mult": 1.0},
@@ -32,7 +34,7 @@ const DADOS := {
 		"descricao": "Um devoto drenado por Rannvhar XV. Ainda reza, mas não lembra para quem.",
 		"hp": 40,
 		"ataque": 12,
-		"defesa": 1,
+		"defesa": 5,
 		"agilidade": 4,
 		"textura": "res://assets/batalha/oco.png",
 		"sprite_mapa": "res://assets/sprites/oco.png",
@@ -57,7 +59,7 @@ const DADOS := {
 		"descricao": "Uma devota drenada por Rannvhar XV. Os olhos procuram alguém que já não existe.",
 		"hp": 36,
 		"ataque": 11,
-		"defesa": 1,
+		"defesa": 5,
 		"agilidade": 6,
 		"textura": "res://assets/batalha/oca.png",
 		"sprite_mapa": "res://assets/sprites/oca.png",
@@ -81,7 +83,7 @@ const DADOS := {
 		"descricao": "Guarda do Reino de Correntes, a serviço da rainha Keith. Espada, escudo e elmo quase impenetrável.",
 		"hp": 75,
 		"ataque": 17,
-		"defesa": 5,
+		"defesa": 25,
 		"agilidade": 6,
 		"textura": "res://assets/batalha/sarnheim.png",
 		"sprite_mapa": "res://assets/sprites/sarnheim.png",
@@ -107,7 +109,7 @@ const DADOS := {
 		"descricao": "Guarda de elite da Igreja. Carrega a luz dos Nove Sóis no peito e o raio na mão.",
 		"hp": 90,
 		"ataque": 15,
-		"defesa": 6,
+		"defesa": 30,
 		"agilidade": 9,
 		"textura": "res://assets/batalha/paladino.png",
 		"sprite_mapa": "res://assets/sprites/paladino.png",

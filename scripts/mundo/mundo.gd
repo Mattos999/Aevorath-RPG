@@ -1,6 +1,7 @@
 extends Node2D
 ## Mapa explorável com movimento em grid de 32x32.
-## Setas/WASD movem, Z/Espaço/Enter interage com o que está à frente.
+## Setas/WASD movem, Z/Espaço/Enter interage com o que está à frente e
+## Esc/Tab/I abrem o menu (inventário, magias e personagem).
 ## O mapa vem de uma cena pintada no editor (MapaCena, em scenes/mapas/).
 
 const TILE := 32
@@ -41,6 +42,7 @@ var tempo_inimigos := 0.0
 var tregua := 0.0  # segundos sem batalha após uma fuga
 
 var hud: Label
+var camada_ui: CanvasLayer
 var caixa_dialogo: PanelContainer
 var texto_dialogo: Label
 var nome_dialogo: Label
@@ -162,6 +164,7 @@ func _criar_feixes() -> void:
 func _criar_interface() -> void:
 	var camada := CanvasLayer.new()
 	add_child(camada)
+	camada_ui = camada
 
 	var fundo_hud := PanelContainer.new()
 	# Canto inferior esquerdo, crescendo para cima.
@@ -234,6 +237,7 @@ func _atualizar_hud() -> void:
 		elif membro.get("sangrando", false):
 			estado = "  (sangrando)"
 		linhas.append("%s  HP %d/%d  MP %d/%d%s" % [membro["nome"], hp, membro["hp"], mp, membro["mp"], estado])
+	linhas.append("[Esc] Menu")
 	var itens := "Bandagens: %d" % Jogo.itens.get("bandagem", 0)
 	if Jogo.tem_pedra_solar():
 		itens += "   Pedra Solar: %d/%d" % [Jogo.pedras_solares[0], Jogo.CARGAS_PEDRA]
@@ -308,12 +312,28 @@ func _process(delta: float) -> void:
 		_interagir()
 		return
 
+	if Input.is_action_just_pressed("menu") and not movendo:
+		abrir_menu()
+		return
+
 	if movendo:
 		return
 	for acao in DIRECOES:
 		if Input.is_action_pressed(acao):
 			_tentar_mover(DIRECOES[acao])
 			break
+
+
+func abrir_menu() -> MenuJogo:
+	bloqueado = true
+	var menu := MenuJogo.new()
+	hud.get_parent().visible = false
+	menu.fechado.connect(func():
+		bloqueado = false
+		hud.get_parent().visible = true
+		_atualizar_hud())
+	camada_ui.add_child(menu)
+	return menu
 
 
 func _tile(pos: Vector2i) -> String:
