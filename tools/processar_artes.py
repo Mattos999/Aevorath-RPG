@@ -340,6 +340,21 @@ def batalha_e_retratos():
     fundo = fundo_fechado(img, fundo_por_gradiente(img, 16, [ESPADA, (440, 600, 440, 790, 34)]), y_min=600)
     salvar(para_batalha(manter_grandes(com_alfa(img, fundo), 2000)), "batalha/paladino.png")
 
+    img = abrir("cruzado_batalha.jpg")
+    arr = np.array(img).astype(np.int32)
+    sat, _ = hsv(np.array(img))
+    brilho = arr.mean(axis=2)
+    fundo = fundo_fechado(img, fundo_por_gradiente(img, 16, [(118, 62, 300, 470, 26)]), y_min=640)
+    chao = sat < 0.06
+    chao[:1000] = False
+    # Sombra e chão entre as pernas (a armadura prateada também é cinza, por isso a caixa).
+    entre = (sat < 0.08) & (brilho > 45) & (brilho < 170)
+    entre[:760] = False
+    entre[990:] = False
+    entre[:, :330] = False
+    entre[:, 600:] = False
+    salvar(para_batalha(manter_grandes(com_alfa(img, fundo | chao | entre), 2000)), "batalha/cruzado.png")
+
     img = abrir("encapuzado_fundo_verde.jpg")
     rgba = manter_grandes(com_alfa(img, preencher_de_fora(fundo_verde(np.array(img)))))
     salvar(para_batalha(rgba), "batalha/encapuzado.png")

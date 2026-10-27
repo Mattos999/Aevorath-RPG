@@ -2,14 +2,6 @@ class_name Inimigos
 ## Dados dos inimigos. As regiões são retângulos (em pixels) na textura de
 ## batalha de cada inimigo e definem onde o jogador mira cada membro.
 
-const REGIOES_HUMANOIDE := {
-	"cabeca": Rect2(70, 8, 52, 56),
-	"torso": Rect2(56, 64, 80, 100),
-	"braco_esq": Rect2(24, 68, 32, 102),
-	"braco_dir": Rect2(136, 68, 32, 102),
-	"pernas": Rect2(64, 160, 64, 80),
-}
-
 const DADOS := {
 	"cruzado": {
 		"id": "cruzado",
@@ -26,7 +18,13 @@ const DADOS := {
 			{"nome": "Golpe de espada", "mult": 1.0},
 			{"nome": "Estocada sagrada", "mult": 1.3, "precisao": 0.8},
 		],
-		"regioes": REGIOES_HUMANOIDE,
+		"regioes": {
+			"cabeca": Rect2(82, 47, 30, 36),
+			"torso": Rect2(75, 80, 45, 50),
+			"braco_esq": Rect2(112, 65, 24, 62),
+			"braco_dir": Rect2(52, 70, 30, 62),  # braço da espada
+			"pernas": Rect2(45, 130, 115, 105),
+		},
 	},
 	"oco": {
 		"id": "oco",
