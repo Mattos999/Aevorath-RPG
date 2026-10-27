@@ -149,6 +149,12 @@
    "letra": "K",
    "x": 0,
    "y": 3
+  },
+  {
+   "nome": "piso_madeira",
+   "letra": ".",
+   "x": 1,
+   "y": 3
   }
  ],
  "entidades": [

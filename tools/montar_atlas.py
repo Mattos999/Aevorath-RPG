@@ -25,7 +25,7 @@ TERRENO = [
     ("correntes", "#"), ("grade", "|"), ("cela_fechada", "D"), ("cela_aberta", "d"),
     ("porta", "W"), ("escada", "X"), ("cama", "B"), ("balde", "U"),
     ("barril", "R"), ("caixa", "Q"), ("altar", "A"), ("placa", "S"),
-    ("esqueleto", "K"),
+    ("esqueleto", "K"), ("piso_madeira", "."),
 ]
 
 # (imagem, letra). Folhas 3x4 usam o primeiro quadro (de frente).
