@@ -10,15 +10,14 @@ signal terminou(resultado: String)  # "vitoria", "derrota" ou "fuga"
 signal _escolha(valor)
 
 const POS_INIMIGO := Vector2(384, 38)
-## Personagem de costas em primeiro plano, à esquerda (as pernas saem da tela).
-## Aparece um por vez: quem está agindo ou quem está levando o golpe.
-const POS_COSTAS := Vector2(-24, 118)
-const ESCALA_COSTAS := 1.15
+## Party de costas em primeiro plano, lado a lado (o menu de combate fica por
+## cima deles). O 1º fica à esquerda olhando para a direita; o 2º à direita,
+## virado para o inimigo no meio.
+const POS_COSTAS := [Vector2(10, 150), Vector2(646, 150)]
+const ESCALA_COSTAS := 0.95
 ## Onde fica cada parte na figura de costas (fração do tamanho da textura).
 const PARTES_COSTAS := {"cabeca": Vector2(0.5, 0.1), "torso": Vector2(0.5, 0.3),
 	"braco_esq": Vector2(0.8, 0.3), "braco_dir": Vector2(0.2, 0.3), "pernas": Vector2(0.5, 0.62)}
-## Começo da área de menus e cartões (à direita da figura de costas).
-const X_PAINEL := 318
 const PAUSA := 0.8
 const CHANCE_FUGA := 0.45
 ## Raio: folha horizontal com 8 quadros de 220x100.
@@ -109,25 +108,27 @@ func _montar_interface() -> void:
 		if c.costas != "":
 			var figura := TextureRect.new()
 			figura.texture = load(c.costas + "parado.png")
-			figura.position = POS_COSTAS
-			figura.visible = figuras.is_empty()
+			var lugar := mini(figuras.size(), POS_COSTAS.size() - 1)
+			figura.position = POS_COSTAS[lugar]
+			figura.flip_h = lugar == 1
 			figura.scale = Vector2.ONE * ESCALA_COSTAS
 			figura.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			figuras[c] = figura
 
-	var painel_log := _painel(Vector2(X_PAINEL, 298), Vector2(960 - X_PAINEL - 10, 60), Color(0, 0, 0, 0.7))
+	for c in figuras:
+		add_child(figuras[c])
+
+	var painel_log := _painel(Vector2(300, 296), Vector2(360, 62), Color(0, 0, 0, 0.75))
 	add_child(painel_log)
 	texto_log = Label.new()
 	texto_log.add_theme_font_size_override("font_size", 13)
 	texto_log.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	painel_log.add_child(texto_log)
 
-	add_child(_painel(Vector2(X_PAINEL - 8, 364), Vector2(968 - X_PAINEL, 176), Color(0.05, 0.03, 0.04, 0.95)))
-	for c in figuras:
-		add_child(figuras[c])
+	add_child(_painel(Vector2(0, 364), Vector2(960, 176), Color(0.05, 0.03, 0.04, 0.88)))
 
 	dica = Label.new()
-	dica.position = Vector2(X_PAINEL + 4, 370)
+	dica.position = Vector2(14, 370)
 	dica.size = Vector2(200, 18)
 	dica.add_theme_font_size_override("font_size", 11)
 	dica.add_theme_color_override("font_color", Color(0.7, 0.65, 0.6))
@@ -135,13 +136,13 @@ func _montar_interface() -> void:
 	add_child(dica)
 
 	menu = VBoxContainer.new()
-	menu.position = Vector2(X_PAINEL + 4, 392)
-	menu.custom_minimum_size = Vector2(196, 0)
+	menu.position = Vector2(14, 392)
+	menu.custom_minimum_size = Vector2(200, 0)
 	menu.add_theme_constant_override("separation", 1)
 	add_child(menu)
 
 	for i in party.size():
-		_criar_cartao(party[i], Vector2(X_PAINEL + 210 + i * 212, 372))
+		_criar_cartao(party[i], Vector2(230 + i * 365, 372))
 
 
 func _painel(pos: Vector2, tamanho: Vector2, cor: Color) -> PanelContainer:
@@ -191,7 +192,7 @@ func _barra(cor: Color) -> ProgressBar:
 
 
 func _criar_cartao(c: Combatente, pos: Vector2) -> void:
-	var painel := _painel(pos, Vector2(206, 160), Color(0.1, 0.07, 0.08))
+	var painel := _painel(pos, Vector2(355, 160), Color(0.1, 0.07, 0.08))
 	add_child(painel)
 	var info := VBoxContainer.new()
 	info.add_theme_constant_override("separation", 3)
@@ -206,18 +207,18 @@ func _criar_cartao(c: Combatente, pos: Vector2) -> void:
 	var nome := Label.new()
 	topo.add_child(nome)
 	var barra_hp := _barra(Color(0.65, 0.12, 0.12))
-	barra_hp.custom_minimum_size = Vector2(190, 10)
+	barra_hp.custom_minimum_size = Vector2(335, 10)
 	info.add_child(barra_hp)
 	var texto_hp := Label.new()
 	texto_hp.add_theme_font_size_override("font_size", 12)
 	info.add_child(texto_hp)
 	var barra_mp := _barra(Color(0.2, 0.45, 0.75))
-	barra_mp.custom_minimum_size = Vector2(190, 8)
+	barra_mp.custom_minimum_size = Vector2(335, 8)
 	info.add_child(barra_mp)
 	var estado := Label.new()
 	estado.add_theme_font_size_override("font_size", 11)
 	estado.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	estado.custom_minimum_size = Vector2(190, 0)
+	estado.custom_minimum_size = Vector2(335, 0)
 	info.add_child(estado)
 	cartoes.append({"painel": painel, "retrato": retrato, "nome": nome, "hp": barra_hp,
 		"texto_hp": texto_hp, "mp": barra_mp, "estado": estado})
@@ -256,6 +257,8 @@ func _atualizar_tudo() -> void:
 		cartao["retrato"].modulate = Color(0.35, 0.1, 0.1) if not c.vivo() else Color.WHITE
 		if c in figuras:
 			figuras[c].modulate = Color(0.35, 0.1, 0.1) if not c.vivo() else Color.WHITE
+			# Quem não está agindo fica um pouco mais escuro.
+			figuras[c].self_modulate = Color.WHITE if c == ativo or ativo == null or not ativo.eh_jogador else Color(0.7, 0.7, 0.7)
 			if not pose_temporaria.has(c):
 				figuras[c].texture = load(c.costas + ("guarda" if c.defendendo else "parado") + ".png")
 		var estilo: StyleBoxFlat = cartao["painel"].get_theme_stylebox("panel")
@@ -282,14 +285,6 @@ func _registrar(texto: String) -> void:
 
 func _pausa(segundos := PAUSA) -> void:
 	await get_tree().create_timer(segundos).timeout
-
-
-## Mostra a figura de costas de `c` (e esconde as outras).
-func _mostrar_figura(c: Combatente) -> void:
-	if not c in figuras:
-		return
-	for membro in figuras:
-		figuras[membro].visible = membro == c
 
 
 ## Troca a pose de costas do membro; com `duracao`, volta à pose normal depois.
@@ -517,7 +512,6 @@ func _turno(c: Combatente) -> void:
 		return
 	_atualizar_tudo()
 	if c.eh_jogador:
-		_mostrar_figura(c)
 		var acao := await _escolher_acao(c)
 		await _executar(c, acao)
 	else:
@@ -690,7 +684,6 @@ func _turno_inimigo(c: Combatente) -> void:
 		return
 	var alvo: Combatente = vivos[rng.randi() % vivos.size()]
 	var parte := _sortear_parte(alvo)
-	_mostrar_figura(alvo)
 	# Magia do inimigo segue a mesma regra da luz, com as Pedras Solares dele.
 	var golpes := []
 	for g in c.ataques:
@@ -756,7 +749,7 @@ func _golpear(alvo: Combatente, parte: String, dano: int, precisao := 1.0, ignor
 		_piscar(sprite_inimigo)
 	else:
 		_piscar(cartoes[party.find(alvo)]["painel"])
-		if alvo in figuras and figuras[alvo].visible:
+		if alvo in figuras:
 			_pose(alvo, "dano", 0.7)
 			_piscar(figuras[alvo])
 	_registrar("%d de dano em %s." % [r["dano"], alvo.nome])
@@ -780,9 +773,11 @@ func _pos_alvo(alvo: Combatente, parte: String) -> Vector2:
 			var r: Rect2 = inimigo.regioes[parte]
 			return POS_INIMIGO + r.get_center()
 		return POS_INIMIGO + sprite_inimigo.texture.get_size() / 2
-	if alvo in figuras and figuras[alvo].visible:
+	if alvo in figuras:
 		var figura: TextureRect = figuras[alvo]
 		var fracao: Vector2 = PARTES_COSTAS.get(parte, PARTES_COSTAS["torso"])
+		if figura.flip_h:
+			fracao.x = 1.0 - fracao.x
 		return figura.position + figura.texture.get_size() * fracao * ESCALA_COSTAS
 	var painel: Control = cartoes[party.find(alvo)]["painel"]
 	return painel.position + Vector2(24, 24)
