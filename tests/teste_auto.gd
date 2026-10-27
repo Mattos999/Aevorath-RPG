@@ -146,8 +146,12 @@ func _testar_equipamento() -> void:
 	var depois := Combatente.criar(aren, true)
 	_checar(depois.dano_arma == 5 and depois.defesa == 12 and depois.agilidade == antes.agilidade + 1, "bônus de equipamento errados")
 	_checar(depois.poder_golpe() > antes.poder_golpe(), "arma melhor deveria dar mais dano")
+	# Mesmo ignorando a esquiva há 2% de erro: tenta até acertar.
 	var rng := RandomNumberGenerator.new()
+	rng.seed = 1
 	var r := depois.receber_golpe("torso", 100, rng, 1.0, true)
+	while not r["acertou"]:
+		r = depois.receber_golpe("torso", 100, rng, 1.0, true)
 	_checar(r["dano"] == 88, "defesa 12%% deveria cortar 12%% do dano (veio %d)" % r["dano"])
 	Jogo.desequipar(aren, "arma")
 	var sem_arma := Combatente.criar(aren, true)
