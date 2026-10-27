@@ -1,13 +1,13 @@
 # Aevorath-RPG
 
 RPG 2D por turnos inspirado em *Fear & Hunger*, no mundo de Aevorath.
-Feito em **Godot 4.3** (GDScript). O jogo final é um `.exe` para Windows.
+Feito em **Godot 4.7** (GDScript). O jogo final é um `.exe` para Windows.
 
 ## Como jogar
 
 - **Baixar o .exe pronto:** na aba *Actions* do GitHub, abra a última execução
   de "Testar e exportar .exe" e baixe o artefato `Aevorath-windows`.
-- **Pelo Godot:** abra o Godot 4.3, importe a pasta do projeto e aperte F5.
+- **Pelo Godot:** abra o Godot 4.7, importe a pasta do projeto e aperte F5.
 
 Controles:
 
@@ -69,12 +69,12 @@ tests/             teste automático headless
   os PNGs em `assets/` mantendo nome e tamanho.
 - **Testar uma batalha direto:** `godot -- --batalha paladino`.
 - **Testes:** `godot --headless res://tests/teste_auto.tscn`.
-- **Exportar local:** instale os templates de exportação do Godot 4.3 e rode
+- **Exportar local:** instale os templates de exportação do Godot 4.7 e rode
   `godot --headless --export-release "Windows Desktop" build/Aevorath.exe`.
 
 ## Pintando o mapa no Godot
 
-1. Abra o projeto no Godot 4.3 e clique em **2D** no topo da tela.
+1. Abra o projeto no Godot 4.7 e clique em **2D** no topo da tela.
 2. No painel FileSystem, abra `scenes/mapas/prisao.tscn` (dois cliques).
 3. Na árvore da cena, clique em **Terreno**. O painel **TileMap** abre embaixo,
    com a paleta dos tiles: chão, paredes, celas, objetos e feixes de luz.
