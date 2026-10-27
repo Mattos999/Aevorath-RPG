@@ -1,4 +1,4 @@
-[gd_resource type="TileSet" load_steps=5 format=3]
+[gd_resource type="TileSet" format=3]
 
 [ext_resource type="Texture2D" path="res://assets/tiles/atlas_terreno.png" id="1_o64v0"]
 [ext_resource type="Texture2D" path="res://assets/tiles/atlas_entidades.png" id="2_staym"]
@@ -78,6 +78,8 @@ texture_region_size = Vector2i(32, 32)
 6:0/0/custom_data_0 = "V"
 7:0/0 = 0
 7:0/0/custom_data_0 = "G"
+0:1/0 = 0
+0:1/0/custom_data_0 = "F"
 
 [resource]
 tile_size = Vector2i(32, 32)

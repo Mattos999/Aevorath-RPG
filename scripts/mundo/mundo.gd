@@ -8,7 +8,7 @@ const TEMPO_PASSO := 0.14
 const ALCANCE_PERSEGUICAO := 6
 const INTERVALO_INIMIGO := 0.45
 
-const INIMIGO_POR_LETRA := {"C": "cruzado", "O": "oco", "N": "sarnheim", "V": "paladino"}
+const INIMIGO_POR_LETRA := {"C": "cruzado", "O": "oco", "F": "oca", "N": "sarnheim", "V": "paladino"}
 
 const PASSAVEIS := ".,~*dWXG"
 ## Inimigos não passam por portas nem pela escada.
@@ -96,7 +96,7 @@ func _carregar_mapa() -> void:
 					if Jogo.eventos.has("porta_%d_%d" % [x, y]):
 						c = "d"
 						mapa.trocar_terreno(pos, "d")
-				"C", "O", "N", "V":
+				"C", "O", "F", "N", "V":
 					var id := "%s_%d_%d" % [c, x, y]
 					if not Jogo.inimigos_derrotados.has(id):
 						_criar_inimigo(id, INIMIGO_POR_LETRA[c], pos)
@@ -111,8 +111,10 @@ func _carregar_mapa() -> void:
 	camera.position = Vector2(TILE / 2, TILE / 2)
 	camera.limit_left = 0
 	camera.limit_top = 0
-	camera.limit_right = grade[0].length() * TILE
-	camera.limit_bottom = grade.size() * TILE
+	# Mapa menor que a tela fica no canto de cima (o HUD usa o espaço de baixo).
+	var tela := get_viewport_rect().size
+	camera.limit_right = maxi(grade[0].length() * TILE, int(tela.x))
+	camera.limit_bottom = maxi(grade.size() * TILE, int(tela.y))
 	camera.position_smoothing_enabled = true
 	jogador.add_child(camera)
 

@@ -14,7 +14,7 @@ extends Node2D
 ##   X  escada (fim da demo)
 ## Entidades:
 ##   P  início do jogador   H  o encapuzado   I  Iselde presa
-##   C  Cruzado   O  Fiel Oco   N  Soldado de Sarnheim   V  Paladino
+##   C  Cruzado   O  Fiel Oco   F  Fiel Oca   N  Soldado de Sarnheim   V  Paladino
 ##   G  Pedra Solar no chão
 ## Pinte a partir da célula (0, 0) para a direita e para baixo.
 

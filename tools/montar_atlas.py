@@ -34,6 +34,7 @@ ENTIDADES = [
     ("sprites/protagonista2.png", "I"), ("sprites/cruzado.png", "C"),
     ("sprites/oco.png", "O"), ("sprites/sarnheim.png", "N"),
     ("sprites/paladino.png", "V"), ("itens/pedra_solar_24.png", "G"),
+    ("sprites/oca.png", "F"),
 ]
 
 

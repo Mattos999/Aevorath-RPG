@@ -15,7 +15,7 @@ func _ready() -> void:
 	# Varia luz, Pedra Solar e tamanho da party para exercitar a regra da magia.
 	var luzes := ["escuro", "sol", "lua"]
 	for aleatorio in [false, true]:
-		for inimigo in ["oco", "cruzado", "sarnheim", "paladino"]:
+		for inimigo in ["oco", "oca", "cruzado", "sarnheim", "paladino"]:
 			for i in 6:
 				Jogo.novo_jogo()
 				if i % 2 == 1:
@@ -60,7 +60,7 @@ func _testar_mapa() -> void:
 	# trancadas (D) contam como passagem, porque o encapuzado entrega a chave.
 	# Objetos e NPCs bloqueiam, mas precisam ter um vizinho alcançável.
 	var paredes := "#T|"
-	var andaveis := ".,~*dDWXGPCONV"
+	var andaveis := ".,~*dDWXGPCOFNV"
 	var visitado := {inicio: true}
 	var fila := [inicio]
 	while not fila.is_empty():

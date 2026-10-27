@@ -351,6 +351,91 @@ def batalha_e_retratos():
     salvar(retrato(abrir("protagonista2_corpo.jpg"), (325, 50, 625, 350)), "batalha/retrato_protagonista2.png")
 
 
+# ------------------------------------------------------------ Ocos
+
+def quadros_sem_grade(nome, inset=7):
+    img = abrir(nome)
+    arr = np.array(img).astype(np.int32)
+    # Verde em qualquer lugar é fundo (também entre pernas e braços).
+    verde = (arr[..., 1] > 110) & (arr[..., 1] > arr[..., 0] * 1.35) & (arr[..., 1] > arr[..., 2] * 1.35)
+    # Tira o reflexo verde das bordas.
+    lim = np.maximum(arr[..., 0], arr[..., 2])
+    arr[..., 1] = np.minimum(arr[..., 1], lim + 8)
+    rgba = com_alfa(Image.fromarray(arr.astype(np.uint8)), verde)
+    w, h = rgba.size
+    cw, ch = w / 3, h / 4
+    q = {}
+    for r in range(4):
+        for c in range(3):
+            cel = rgba.crop((round(c*cw)+inset, round(r*ch)+inset, round((c+1)*cw)-inset, round((r+1)*ch)-inset))
+            cel = manter_grandes(cel, so_maior=True)
+            q[(r, c)] = cel.crop(caixa_util(np.array(cel)[..., 3]))
+    return q
+
+def pescoco(q):
+    larg = (np.array(q)[..., 3] > 0).sum(axis=1)
+    h = len(larg); i0, i1 = int(h * .2), int(h * .5)
+    return i0 + int(np.argmin(larg[i0:i1]))
+
+def cabecao(q, lado, sx, sy, sobra=6):
+    """Aumenta o crânio. lado: 'frente' cresce para cima; 'esq' (rosto à esquerda) cresce para cima e para a direita."""
+    p = pescoco(q) + sobra
+    w, h = q.size
+    cab = q.crop((0, 0, w, p))
+    nw, nh = round(w * sx), round(p * sy)
+    cab = cab.resize((nw, nh), Image.LANCZOS)
+    extra_y = nh - p
+    if lado == "frente":
+        ox = (nw - w) // 2
+        novo = Image.new("RGBA", (nw, h + extra_y), (0, 0, 0, 0))
+        novo.alpha_composite(q, (ox, extra_y))
+        novo.alpha_composite(cab, (0, 0))
+    else:
+        # rosto fica no lugar, crânio cresce para trás (direita)
+        bb = caixa_util(np.array(cab)[..., 3])
+        novo = Image.new("RGBA", (max(w, nw), h + extra_y), (0, 0, 0, 0))
+        novo.alpha_composite(q, (0, extra_y))
+        novo.alpha_composite(cab, (0, 0))
+    a = novo.split()[3].point(lambda v: 255 if v > 100 else 0); novo.putalpha(a)
+    return novo.crop(caixa_util(np.array(novo)[..., 3]))
+
+def folha_oco(nome, sx_f=1.22, sy_f=1.85, sx_l=1.6, sy_l=1.65):
+    """Folha 3x4 dos Ocos. A IA desenhou a cabeça pequena e redonda; aqui o
+    crânio cresce para cima (frente/costas) e para trás (lado). Nas linhas de
+    lado e de costas o quadro do meio veio de frente, então é substituído."""
+    q = quadros_sem_grade(nome)
+    def F(k): return cabecao(q[k], "frente", sx_f, sy_f)
+    def L(k, esp=False):
+        im = q[k].transpose(Image.FLIP_LEFT_RIGHT) if esp else q[k]
+        return cabecao(im, "esq", sx_l, sy_l)
+    def flip(im): return im.transpose(Image.FLIP_LEFT_RIGHT)
+    baixo = [F((0, 0)), F((0, 1)), F((0, 2))]
+    esq = [L((1, 0)), L((2, 0)), L((1, 2), True)]
+    dir_ = [flip(i) for i in esq]
+    cima = [F((3, 0)), flip(F((3, 0))), F((3, 2))]
+    linhas = [baixo, esq, dir_, cima]
+    tudo = [i for l in linhas for i in l]
+    escala = min(30 / max(i.size[1] for i in tudo), 32 / max(i.size[0] for i in tudo))
+    folha = Image.new("RGBA", (96, 128), (0, 0, 0, 0))
+    for r, l in enumerate(linhas):
+        for c, im in enumerate(l):
+            m = reduzir(im, escala)
+            folha.alpha_composite(m, (c * 32 + (32 - m.size[0]) // 2, r * 32 + 32 - m.size[1] - 1))
+    return folha
+
+
+def ocos():
+    for nome in ("oco", "oca"):
+        salvar(folha_oco(f"{nome}_folha.jpg"), f"sprites/{nome}.png")
+        img = abrir(f"{nome}_batalha.jpg")
+        fundo = fundo_fechado(img, fundo_por_gradiente(img, 16), y_min=500)
+        # Sombra no chão: cinza sem cor abaixo da cintura.
+        sat, _ = hsv(np.array(img))
+        chao = sat < 0.10
+        chao[:800] = False
+        salvar(para_batalha(manter_grandes(com_alfa(img, fundo | chao), so_maior=True)), f"batalha/{nome}.png")
+
+
 # ------------------------------------------------------------ cenário
 
 # Limites das linhas da folha de tiles (em pixels da imagem original).
@@ -444,5 +529,6 @@ def efeitos():
 if __name__ == "__main__":
     folhas_de_mapa()
     batalha_e_retratos()
+    ocos()
     tiles()
     efeitos()
