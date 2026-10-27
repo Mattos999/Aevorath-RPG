@@ -24,6 +24,8 @@ const DIRECOES := {
 const LINHA_FOLHA := {Vector2i.DOWN: 0, Vector2i.LEFT: 1, Vector2i.RIGHT: 2, Vector2i.UP: 3}
 
 @export var cena_mapa: PackedScene = preload("res://scenes/mapas/prisao.tscn")
+## Mostra o mapa em 3D (F3 alterna com o 2D durante o jogo).
+@export var visao_3d := true
 
 var mapa: MapaCena
 var grade: Array[String] = []
@@ -56,6 +58,8 @@ func _ready() -> void:
 	_criar_feixes()
 	_criar_interface()
 	_atualizar_hud()
+	if visao_3d:
+		add_child(Visao3D.new(self))
 
 
 func _carregar_mapa() -> void:
@@ -237,7 +241,7 @@ func _atualizar_hud() -> void:
 		elif membro.get("sangrando", false):
 			estado = "  (sangrando)"
 		linhas.append("%s  HP %d/%d  MP %d/%d%s" % [membro["nome"], hp, membro["hp"], mp, membro["mp"], estado])
-	linhas.append("[Esc] Menu")
+	linhas.append("[Esc] Menu   [F3] 2D/3D")
 	var itens := "Bandagens: %d" % Jogo.itens.get("bandagem", 0)
 	if Jogo.tem_pedra_solar():
 		itens += "   Pedra Solar: %d/%d" % [Jogo.pedras_solares[0], Jogo.CARGAS_PEDRA]
