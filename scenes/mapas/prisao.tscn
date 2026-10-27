@@ -23,18 +23,18 @@ tile_map_data = PackedByteArray("AAAbAAEA//////////8CAAIAAQAAAAAAAAAHAAIA///////
 tile_set = ExtResource("2_sxltr")
 
 [node name="Paladino1" type="Node2D" parent="." unique_id=675289451]
-position = Vector2(864, 32)
+position = Vector2(1728, 64)
 script = ExtResource("3_jrhwh")
 inimigo = "paladino"
 comportamento = "parado"
 
 [node name="PedraSolar1" type="Node2D" parent="." unique_id=1480203433]
-position = Vector2(224, 64)
+position = Vector2(448, 128)
 script = ExtResource("3_jrhwh")
 tipo = 2
 
 [node name="Iselde" type="Node2D" parent="." unique_id=974390825]
-position = Vector2(352, 64)
+position = Vector2(704, 128)
 script = ExtResource("3_jrhwh")
 tipo = 1
 id_npc = "iselde"
@@ -43,23 +43,23 @@ dialogo = ExtResource("4_y447c")
 some_com_evento = "iselde"
 
 [node name="Encapuzado" type="Node2D" parent="." unique_id=1424510855]
-position = Vector2(32, 96)
+position = Vector2(64, 192)
 script = ExtResource("3_jrhwh")
 tipo = 1
 id_npc = "encapuzado"
 dialogo = ExtResource("5_0sjs0")
 
 [node name="SoldadoSarnheim1" type="Node2D" parent="." unique_id=838288476]
-position = Vector2(768, 96)
+position = Vector2(1536, 192)
 script = ExtResource("3_jrhwh")
 inimigo = "sarnheim"
 comportamento = "patrulhar"
 
 [node name="FielOco1" type="Node2D" parent="." unique_id=1416687433]
-position = Vector2(192, 192)
+position = Vector2(384, 384)
 script = ExtResource("3_jrhwh")
 
 [node name="Cruzado1" type="Node2D" parent="." unique_id=5925982]
-position = Vector2(608, 224)
+position = Vector2(1216, 448)
 script = ExtResource("3_jrhwh")
 inimigo = "cruzado"

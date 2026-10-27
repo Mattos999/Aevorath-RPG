@@ -5,12 +5,12 @@ extends Node2D
 ## Algo que vive no mapa: inimigo, NPC ou Pedra Solar no chão.
 ## Coloque como filho da cena do mapa (botão direito no nó raiz > Adicionar
 ## nó filho > Entidade), arraste até a célula e configure no Inspector.
-## A posição gruda na grade de 32 px sozinha.
+## A posição gruda na grade de 64 px sozinha.
 
 enum Tipo { INIMIGO, NPC, PEDRA_SOLAR }
 
-const TILE := 32
-const FOLHA_PEDRA := "res://assets/itens/pedra_solar_24.png"
+const TILE := 64
+const FOLHA_PEDRA := "res://assets/itens/pedra_solar_48.png"
 
 @export var tipo := Tipo.INIMIGO:
 	set(valor):
@@ -102,10 +102,10 @@ func _draw() -> void:
 		return
 	var tex: Texture2D = load(caminho)
 	var origem := Rect2(Vector2.ZERO, tex.get_size())
-	if tex.get_width() == 96 and tex.get_height() == 128:
+	if tex.get_width() == TILE * 3 and tex.get_height() == TILE * 4:
 		origem = Rect2(0, 0, TILE, TILE)
 	var destino := Rect2(Vector2.ZERO, Vector2(TILE, TILE))
 	if tipo == Tipo.PEDRA_SOLAR:
-		destino = Rect2(Vector2(4, 4), Vector2(24, 24))
+		destino = Rect2(Vector2(8, 8), Vector2(48, 48))
 	draw_texture_rect_region(tex, destino, origem)
 	draw_rect(Rect2(0, 0, TILE, TILE), Color(1, 0.3, 0.3) if tipo == Tipo.INIMIGO else Color(0.4, 0.8, 1.0), false, 1.0)

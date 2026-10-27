@@ -9,7 +9,7 @@ extends CanvasLayer
 ## pintar o TileMap 2D também muda o 3D.
 
 ## Resolução real do 3D (a tela é ampliada 2x, o que dá o visual pixelado).
-const ENCOLHER := 2
+const ENCOLHER := 1
 ## Altura das paredes. Paredes com chão logo atrás (do lado da câmera)
 ## ficam baixas para não esconder quem está atrás delas.
 const ALTURA_PAREDE := 1.0
@@ -17,7 +17,7 @@ const ALTURA_PAREDE_FRENTE := 0.3
 ## Câmera: distância acima e atrás do jogador.
 const CAMERA_ALTURA := 6.0
 const CAMERA_DISTANCIA := 4.2
-const PIXEL := 1.0 / 32.0
+const PIXEL := 1.0 / 64.0
 ## Letras que viram parede (bloco), grade/porta (placa fina) ou só chão.
 const PAREDES := "#T"
 const PLACAS := "|D"

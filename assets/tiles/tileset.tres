@@ -6,7 +6,7 @@
 [sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_7x3hu"]
 resource_name = "Terreno"
 texture = ExtResource("1_o64v0")
-texture_region_size = Vector2i(32, 32)
+texture_region_size = Vector2i(64, 64)
 0:0/0 = 0
 0:0/0/custom_data_0 = "."
 1:0/0 = 0
@@ -63,7 +63,7 @@ texture_region_size = Vector2i(32, 32)
 [sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_qxau0"]
 resource_name = "Entidades"
 texture = ExtResource("2_staym")
-texture_region_size = Vector2i(32, 32)
+texture_region_size = Vector2i(64, 64)
 0:0/0 = 0
 0:0/0/custom_data_0 = "P"
 1:0/0 = 0
@@ -84,7 +84,7 @@ texture_region_size = Vector2i(32, 32)
 0:1/0/custom_data_0 = "F"
 
 [resource]
-tile_size = Vector2i(32, 32)
+tile_size = Vector2i(64, 64)
 custom_data_layer_0/name = "letra"
 custom_data_layer_0/type = 4
 sources/0 = SubResource("TileSetAtlasSource_7x3hu")

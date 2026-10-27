@@ -1,4 +1,4 @@
-"""Junta os tiles de 32x32 em atlas para o TileSet do Godot.
+"""Junta os tiles de 64x64 em atlas para o TileSet do Godot.
 
 Uso: python3 tools/montar_atlas.py   (depois: tools/gerar_tileset.gd)
 Gera assets/tiles/atlas_terreno.png, assets/tiles/atlas_entidades.png e
@@ -15,7 +15,7 @@ from PIL import Image
 RAIZ = Path(__file__).resolve().parent.parent
 TILES = RAIZ / "assets" / "tiles"
 COLUNAS = 8
-T = 32
+T = 64
 
 # (arquivo em assets/tiles, letra)
 TERRENO = [
@@ -33,7 +33,7 @@ ENTIDADES = [
     ("sprites/protagonista.png", "P"), ("sprites/encapuzado.png", "H"),
     ("sprites/protagonista2.png", "I"), ("sprites/cruzado.png", "C"),
     ("sprites/oco.png", "O"), ("sprites/sarnheim.png", "N"),
-    ("sprites/paladino.png", "V"), ("itens/pedra_solar_24.png", "G"),
+    ("sprites/paladino.png", "V"), ("itens/pedra_solar_48.png", "G"),
     ("sprites/oca.png", "F"),
 ]
 
@@ -56,7 +56,7 @@ def abrir_tile(nome):
 
 def abrir_entidade(caminho):
     img = Image.open(RAIZ / "assets" / caminho).convert("RGBA")
-    if img.size == (96, 128):
+    if img.size == (3 * T, 4 * T):
         return img.crop((0, 0, T, T))
     quadro = Image.new("RGBA", (T, T), (0, 0, 0, 0))
     quadro.paste(img, ((T - img.width) // 2, (T - img.height) // 2))

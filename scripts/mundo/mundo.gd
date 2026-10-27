@@ -4,7 +4,7 @@ extends Node2D
 ## Esc/Tab/I abrem o menu (inventário, magias e personagem).
 ## O mapa vem de uma cena pintada no editor (MapaCena, em scenes/mapas/).
 
-const TILE := 32
+const TILE := 64
 const TEMPO_PASSO := 0.14
 const ALCANCE_PERSEGUICAO := 6
 const INTERVALO_INIMIGO := 0.45
@@ -97,7 +97,7 @@ func _carregar_mapa() -> void:
 						c = "."
 					else:
 						var pedra := Sprite2D.new()
-						pedra.texture = load("res://assets/itens/pedra_solar_24.png")
+						pedra.texture = load("res://assets/itens/pedra_solar_48.png")
 						pedra.position = Vector2(pos * TILE) + Vector2(TILE, TILE) / 2
 						pedra.z_index = 1
 						add_child(pedra)
@@ -143,7 +143,7 @@ func _sprite_de_folha(caminho: String, pos: Vector2i) -> Sprite2D:
 	no.centered = false
 	no.position = Vector2(pos * TILE)
 	no.z_index = 1
-	if no.texture.get_width() == 96 and no.texture.get_height() == 128:
+	if no.texture.get_width() == TILE * 3 and no.texture.get_height() == TILE * 4:
 		no.hframes = 3
 		no.vframes = 4
 	add_child(no)
@@ -172,7 +172,7 @@ func _carregar_entidades() -> void:
 				if not Jogo.eventos.has("pedra_%d_%d" % [pos.x, pos.y]):
 					_trocar_tile(pos, "G")
 					var pedra := Sprite2D.new()
-					pedra.texture = load("res://assets/itens/pedra_solar_24.png")
+					pedra.texture = load("res://assets/itens/pedra_solar_48.png")
 					pedra.position = Vector2(pos * TILE) + Vector2(TILE, TILE) / 2
 					pedra.z_index = 1
 					add_child(pedra)
@@ -202,7 +202,7 @@ func _criar_feixes() -> void:
 		for y in grade.size():
 			for x in grade[y].length():
 				if grade[y][x] == "*":
-					feixes.draw_rect(Rect2(x * TILE + 4, (y - 1) * TILE, TILE - 8, TILE * 2), cor))
+					feixes.draw_rect(Rect2(x * TILE + 8, (y - 1) * TILE, TILE - 16, TILE * 2), cor))
 	add_child(feixes)
 	set_meta("feixes", feixes)
 

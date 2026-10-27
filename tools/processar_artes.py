@@ -4,11 +4,11 @@ Uso: python3 tools/processar_artes.py
 Requer Pillow e numpy. Rode de novo sempre que trocar uma arte original.
 
 Formatos gerados:
-- Folhas de mapa: 96x128, 3 colunas (passos) x 4 linhas (baixo, esquerda,
-  direita, cima), quadros de 32x32.
+- Folhas de mapa: 192x256, 3 colunas (passos) x 4 linhas (baixo, esquerda,
+  direita, cima), quadros de 64x64.
 - Batalha: 192x256 com fundo transparente.
 - Retratos: 128x128.
-- Tiles: 32x32.
+- Tiles: 64x64.
 - Efeitos: fundo preto (o jogo desenha com mistura aditiva).
 """
 from collections import deque
@@ -20,6 +20,8 @@ from PIL import Image
 RAIZ = Path(__file__).resolve().parent.parent
 ORIGEM = RAIZ / "arte_original"
 DESTINO = RAIZ / "assets"
+# Lado do tile e do quadro das folhas de mapa, em pixels.
+Q = 64
 
 
 def abrir(nome):
@@ -130,36 +132,38 @@ def reduzir(quadro, escala):
     return menor
 
 
-def montar_folha(quadros, layout, altura=30):
+def montar_folha(quadros, layout, altura=Q - 4):
     """layout: 4 listas (baixo, esquerda, direita, cima) de (linha, coluna, espelhar)."""
     usados = [quadros[(r, c)] for direcao in layout for (r, c, _) in direcao]
-    escala = min(altura / max(q.size[1] for q in usados), 32 / max(q.size[0] for q in usados))
-    folha = Image.new("RGBA", (96, 128), (0, 0, 0, 0))
+    escala = min(altura / max(q.size[1] for q in usados), Q / max(q.size[0] for q in usados))
+    folha = Image.new("RGBA", (3 * Q, 4 * Q), (0, 0, 0, 0))
     for linha, direcao in enumerate(layout):
         for coluna, (r, c, espelhar) in enumerate(direcao):
             q = reduzir(quadros[(r, c)], escala)
             if espelhar:
                 q = q.transpose(Image.FLIP_LEFT_RIGHT)
-            x = coluna * 32 + (32 - q.size[0]) // 2
-            y = linha * 32 + 32 - q.size[1] - 1
+            x = coluna * Q + (Q - q.size[0]) // 2
+            y = linha * Q + Q - q.size[1] - 1
             folha.alpha_composite(q, (x, y))
     return folha
 
 
-def costas_de_frente(quadro32):
-    """Cria a vista de costas trocando rosto por cabelo e a frente da túnica pelas costas."""
-    im = quadro32.copy()
+def costas_de_frente(quadro):
+    """Cria a vista de costas trocando rosto por cabelo e a frente da túnica pelas costas.
+    As medidas abaixo são de um quadro de 32 px; k ajusta para o tamanho Q."""
+    im = quadro.copy()
+    k = Q // 32
     p = im.load()
 
     def pele(c):
         return c[3] and c[0] > 150 and c[0] - c[2] > 40
 
-    colunas = [x for x in range(32) if any(p[x, y][3] for y in range(2, 16))]
+    colunas = [x for x in range(Q) if any(p[x, y][3] for y in range(2 * k, 16 * k))]
     x0, x1 = min(colunas), max(colunas)
     tunica = (90, 70, 50, 255)
-    for y in range(17, 24):
+    for y in range(17 * k, 24 * k):
         achou = False
-        for x in range(x0 + 3, x1 - 2):
+        for x in range(x0 + 3 * k, x1 - 2 * k):
             c = p[x, y]
             if c[3] and not pele(c) and sum(c[:3]) / 3 > 55:
                 tunica, achou = c, True
@@ -167,20 +171,21 @@ def costas_de_frente(quadro32):
         if achou:
             break
     cabelo, raspado = (38, 34, 32, 255), (96, 84, 76, 255)
-    for y in range(6, 16):
-        for x in range(x0 + 2, x1 - 1):
+    for y in range(6 * k, 16 * k):
+        for x in range(x0 + 2 * k, x1 - k):
             c = p[x, y]
-            if not c[3] or (y >= 14 and pele(c)):
+            if not c[3] or (y >= 14 * k and pele(c)):
                 continue
-            p[x, y] = cabelo if y < 10 else raspado
-    for y in range(16, 24):
-        for x in range(x0 + 3, x1 - 2):
+            p[x, y] = cabelo if y < 10 * k else raspado
+    for y in range(16 * k, 24 * k):
+        for x in range(x0 + 3 * k, x1 - 2 * k):
             c = p[x, y]
             if c[3] and not pele(c):
                 p[x, y] = tunica
     meio = (x0 + x1) // 2
-    for y in range(17, 23):
-        p[meio, y] = tuple(max(0, v - 35) for v in tunica[:3]) + (255,)
+    for y in range(17 * k, 23 * k):
+        for x in range(meio, meio + k):
+            p[x, y] = tuple(max(0, v - 35) for v in tunica[:3]) + (255,)
     return im
 
 
@@ -192,8 +197,8 @@ def folhas_de_mapa():
     q = recortar_quadros(img, preencher_de_fora(fundo_xadrez_claro(np.array(img))), 4, 3)
     folha = montar_folha(q, [frente, [(1, i, False) for i in range(3)], [(2, i, False) for i in range(3)], frente])
     for i in range(3):
-        quadro = folha.crop((i * 32, 0, i * 32 + 32, 32))
-        folha.paste(costas_de_frente(quadro), (i * 32, 96))
+        quadro = folha.crop((i * Q, 0, i * Q + Q, Q))
+        folha.paste(costas_de_frente(quadro), (i * Q, 3 * Q))
     salvar(folha, "sprites/protagonista.png")
 
     img = abrir("protagonista2_folha.jpg")
@@ -488,12 +493,12 @@ def folha_oco(nome, sx_f=1.22, sy_f=1.85, sx_l=1.6, sy_l=1.65):
     cima = [F((3, 0)), flip(F((3, 0))), F((3, 2))]
     linhas = [baixo, esq, dir_, cima]
     tudo = [i for l in linhas for i in l]
-    escala = min(30 / max(i.size[1] for i in tudo), 32 / max(i.size[0] for i in tudo))
-    folha = Image.new("RGBA", (96, 128), (0, 0, 0, 0))
+    escala = min((Q - 4) / max(i.size[1] for i in tudo), Q / max(i.size[0] for i in tudo))
+    folha = Image.new("RGBA", (3 * Q, 4 * Q), (0, 0, 0, 0))
     for r, l in enumerate(linhas):
         for c, im in enumerate(l):
             m = reduzir(im, escala)
-            folha.alpha_composite(m, (c * 32 + (32 - m.size[0]) // 2, r * 32 + 32 - m.size[1] - 1))
+            folha.alpha_composite(m, (c * Q + (Q - m.size[0]) // 2, r * Q + Q - m.size[1] - 1))
     return folha
 
 
@@ -526,7 +531,7 @@ def tiles():
     for r, (y0, y1) in enumerate(LINHAS_TILES):
         for c, nome in enumerate(NOMES_TILES[r]):
             celula = img.crop((round(c * largura) + 3, y0 + 3, round((c + 1) * largura) - 3, y1 - 3))
-            tile = celula.resize((32, 32), Image.BOX)
+            tile = celula.resize((Q, Q), Image.BOX)
             if nome == "chao_sol":
                 # Reforça o feixe de sol para ele se destacar do chão comum.
                 arr = np.array(tile).astype(np.float32)
@@ -534,12 +539,15 @@ def tiles():
                 tile = Image.fromarray(arr.astype(np.uint8))
             salvar(tile, f"tiles/{nome}.png")
     # Topo de parede (parede com outra parede embaixo): pedra escura lisa.
-    topo = Image.new("RGB", (32, 32), (24, 24, 29))
+    topo = Image.new("RGB", (Q, Q), (24, 24, 29))
     px = topo.load()
-    for i in range(32):
-        px[i, 0] = px[0, i] = (44, 44, 52)
-        px[i, 31] = px[31, i] = (14, 14, 18)
+    for i in range(Q):
+        for b in range(Q // 32):
+            px[i, b] = px[b, i] = (44, 44, 52)
+            px[i, Q - 1 - b] = px[Q - 1 - b, i] = (14, 14, 18)
     salvar(topo, "tiles/parede_topo.png")
+    # Piso de madeira desenhado pelo Carlos já em 64x64.
+    salvar(Image.open(ORIGEM / "piso_madeira_64.png").convert("RGB").resize((Q, Q), Image.BOX), "tiles/piso_madeira.png")
 
     fundo = abrir("fundo_batalha_prisao.jpg")
     salvar(fundo.resize((960, 540), Image.LANCZOS), "batalha/fundo_prisao.png")
@@ -590,7 +598,7 @@ def efeitos():
     s, _ = hsv(arr)
     rgba = manter_grandes(com_alfa(pedra, preencher_de_fora(s < 0.15)), so_maior=True)
     rgba = rgba.crop(caixa_util(np.array(rgba)[..., 3]))
-    for tamanho in (24, 96):
+    for tamanho in (24, 48, 96):
         icone = rgba.copy()
         icone.thumbnail((tamanho, tamanho), Image.LANCZOS)
         icone.putalpha(icone.split()[3].point(lambda v: 255 if v > 110 else 0))

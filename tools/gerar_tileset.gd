@@ -6,6 +6,7 @@ extends SceneTree
 
 const SAIDA := "res://assets/tiles/tileset.tres"
 const FONTES := ["terreno", "entidades"]
+const TAMANHO := Vector2i(64, 64)
 
 
 func _init() -> void:
@@ -15,10 +16,10 @@ func _init() -> void:
 		tileset = load(SAIDA)
 	else:
 		tileset = TileSet.new()
-		tileset.tile_size = Vector2i(32, 32)
 		tileset.add_custom_data_layer()
 		tileset.set_custom_data_layer_name(0, "letra")
 		tileset.set_custom_data_layer_type(0, TYPE_STRING)
+	tileset.tile_size = TAMANHO
 	for i in FONTES.size():
 		var atlas: TileSetAtlasSource
 		if tileset.has_source(i):
@@ -26,9 +27,9 @@ func _init() -> void:
 		else:
 			atlas = TileSetAtlasSource.new()
 			atlas.resource_name = FONTES[i].capitalize()
-			atlas.texture_region_size = Vector2i(32, 32)
 			atlas.texture = load("res://assets/tiles/atlas_%s.png" % FONTES[i])
 			tileset.add_source(atlas, i)
+		atlas.texture_region_size = TAMANHO
 		for tile in dados[FONTES[i]]:
 			var coords := Vector2i(tile["x"], tile["y"])
 			if not atlas.has_tile(coords):
