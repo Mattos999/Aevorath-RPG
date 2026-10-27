@@ -285,8 +285,14 @@ func _avancar_dialogo() -> void:
 
 static func _falas(lista: Array, nome: String, retrato: String) -> Array:
 	var paginas_ := []
-	for texto in lista:
-		paginas_.append({"texto": texto, "nome": nome, "retrato": retrato})
+	for texto: String in lista:
+		var pagina := {"texto": texto, "nome": nome, "retrato": retrato}
+		var dois_pontos := texto.find(": ")
+		if dois_pontos > 0 and Mapas.FALANTES.has(texto.left(dois_pontos)):
+			pagina["nome"] = texto.left(dois_pontos)
+			pagina["retrato"] = Mapas.FALANTES[pagina["nome"]]
+			pagina["texto"] = texto.substr(dois_pontos + 2)
+		paginas_.append(pagina)
 	return paginas_
 
 
