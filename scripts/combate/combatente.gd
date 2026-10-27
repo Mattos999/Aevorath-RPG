@@ -71,6 +71,8 @@ var efeitos_equip: Array = []
 var estados: Dictionary = {}
 var colar_usado := false
 var textura: String
+## Prefixo das poses de costas na batalha ("" = só o cartão com retrato).
+var costas := ""
 ## Habilidades disponíveis (ids em Habilidades.DADOS).
 var habilidades: Array = []
 ## Ataques do inimigo: [{nome, mult}]
@@ -108,6 +110,7 @@ static func criar(dados: Dictionary, jogador: bool) -> Combatente:
 		if item.has("efeito"):
 			c.efeitos_equip.append(item["efeito"])
 	c.textura = dados.get("textura", "")
+	c.costas = dados.get("costas", "")
 	c.habilidades = dados.get("habilidades", []).duplicate()
 	c.ataques = dados.get("ataques", [{"nome": "Golpe", "mult": 1.0}]).duplicate(true)
 	c.regioes = dados.get("regioes", {})

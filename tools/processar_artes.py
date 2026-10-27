@@ -228,13 +228,13 @@ def folhas_de_mapa():
 
 # ------------------------------------------------------------ batalha e retratos
 
-def fundo_por_gradiente(img, tolerancia=8, protegidos=()):
+def fundo_por_gradiente(img, tolerancia=8, protegidos=(), cinza_max=18):
     """Fundo cinza em degradê: cresce a partir das bordas por pixels cinza
     parecidos com o vizinho. `protegidos` são segmentos (x0, y0, x1, y1, raio)
     que nunca viram fundo (ex.: lâmina de espada cinza)."""
     arr = np.array(img).astype(np.int32)
     h, w, _ = arr.shape
-    cinza = (arr.max(axis=2) - arr.min(axis=2)) <= 18
+    cinza = (arr.max(axis=2) - arr.min(axis=2)) <= cinza_max
     yy, xx = np.mgrid[0:h, 0:w]
     for ax, ay, bx, by, r in protegidos:
         dx, dy = bx - ax, by - ay
@@ -372,6 +372,56 @@ def batalha_e_retratos():
 
     salvar(retrato(abrir("protagonista_corpo.jpg"), (300, 70, 600, 370)), "batalha/retrato_protagonista.png")
     salvar(retrato(abrir("protagonista2_corpo.jpg"), (325, 50, 625, 350)), "batalha/retrato_protagonista2.png")
+
+
+# ------------------------------------------------------------ party de costas
+
+POSES_COSTAS = {"parado": "", "soco": "_soco", "guarda": "_guarda", "magia": "_magia", "dano": "_dano"}
+
+
+def limpar_tracos(figura, raio=2):
+    """Abertura morfológica: apaga traços finos (linhas de movimento, respingos)."""
+    def passar(m, f):
+        r = m.copy()
+        for dy in range(-raio, raio + 1):
+            for dx in range(-raio, raio + 1):
+                r = f(r, np.roll(np.roll(m, dy, 0), dx, 1))
+        return r
+    return passar(passar(figura, np.logical_and), np.logical_or) & figura
+
+
+def costas():
+    for prefixo, nome in (("protagonista", "aren"), ("protagonista2", "iselde")):
+        costas_de(prefixo, nome)
+
+
+def costas_de(prefixo, nome):
+    """Protagonista visto de costas na batalha, espelhado (ele olha para a
+    direita, onde está o inimigo). Todas as poses usam o mesmo recorte para
+    não pularem de lugar quando trocam."""
+    for pose, sufixo in POSES_COSTAS.items():
+        img = abrir(f"{prefixo}_costas{sufixo}.jpg")
+        arr = np.array(img).astype(np.int32)
+        sat, _ = hsv(np.array(img))
+        brilho = arr.mean(axis=2)
+        if nome == "iselde":
+            # Roupa branca: só cinza bem neutro vira fundo (o branco dela é amarelado).
+            borda = fundo_por_gradiente(img, 6, cinza_max=9)
+        else:
+            # Na pose de dano o colete escuro emenda no fundo com tolerância alta.
+            borda = fundo_por_gradiente(img, 8 if pose == "dano" else 16)
+        bolsoes = fundo_fechado(img, borda, y_min=250) & ~borda & (brilho > 90)
+        chao = sat < 0.10
+        if nome == "iselde":
+            neutro = (arr.max(axis=2) - arr.min(axis=2)) <= 9
+            bolsoes &= neutro
+            chao = neutro & (brilho < 165)
+        chao[:850] = False
+        figura = limpar_tracos(~(borda | bolsoes | chao))
+        rgba = manter_grandes(com_alfa(img, ~figura), so_maior=True).crop((40, 80, 840, 1180))
+        rgba = rgba.transpose(Image.FLIP_LEFT_RIGHT).resize((320, 440), Image.LANCZOS)
+        rgba.putalpha(rgba.split()[3].point(lambda v: 255 if v > 128 else 0))
+        salvar(rgba, f"batalha/costas/{nome}_{pose}.png")
 
 
 # ------------------------------------------------------------ Ocos
@@ -552,6 +602,7 @@ def efeitos():
 if __name__ == "__main__":
     folhas_de_mapa()
     batalha_e_retratos()
+    costas()
     ocos()
     tiles()
     efeitos()

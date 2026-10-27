@@ -22,6 +22,8 @@ const PERSONAGENS := {
 		"defesa": 0,
 		"agilidade": 9,
 		"textura": "res://assets/batalha/retrato_protagonista.png",
+		# Na batalha aparece de costas, em primeiro plano: <costas><pose>.png
+		"costas": "res://assets/batalha/costas/aren_",
 		"folha_mapa": "res://assets/sprites/protagonista.png",
 		"habilidades": ["corte_preciso", "golpe_destruidor"],
 		"equipamento": {"arma": "espada_enferrujada", "corpo": "panos_velhos", "pes": "calcados_velhos"},
@@ -40,6 +42,7 @@ const PERSONAGENS := {
 		"defesa": 0,
 		"agilidade": 12,
 		"textura": "res://assets/batalha/retrato_protagonista2.png",
+		"costas": "res://assets/batalha/costas/iselde_",
 		"folha_mapa": "res://assets/sprites/protagonista2.png",
 		"habilidades": ["bencao_vaelora", "regeneracao"],
 		"equipamento": {"corpo": "panos_velhos", "pes": "calcados_velhos"},
