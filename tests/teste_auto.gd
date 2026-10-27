@@ -14,6 +14,7 @@ func _ready() -> void:
 	_testar_luz()
 	_testar_equipamento()
 	await _testar_menu()
+	await _testar_mundo()
 	# Varia luz, Pedra Solar e tamanho da party para exercitar a regra da magia.
 	var luzes := ["escuro", "sol", "lua"]
 	for aleatorio in [false, true]:
@@ -84,6 +85,59 @@ func _testar_mapa() -> void:
 			if not (linhas[y][x] in paredes):
 				_checar(visitado.has(Vector2i(x, y)), "tile inalcançável em %s" % Vector2i(x, y))
 	print("mapa ok")
+
+
+## Entidades do mapa, conversas do Dialogue Manager e comportamentos.
+func _testar_mundo() -> void:
+	Jogo.novo_jogo()
+	var m = load("res://scenes/mundo.tscn").instantiate()
+	m.visao_3d = false
+	add_child(m)
+	await get_tree().process_frame
+	var ids := {}
+	for pos in m.npcs:
+		ids[m.npcs[pos]["id"]] = pos
+	_checar(ids.has("encapuzado") and ids.has("iselde"), "NPCs do mapa não carregaram: %s" % [ids.keys()])
+	_checar(m.pedras_no_chao.size() == 1, "a Pedra Solar do chão não carregou")
+	var jeitos := {}
+	for id in m.inimigos:
+		jeitos[m.inimigos[id]["tipo"]] = m.inimigos[id]["comportamento"]
+	_checar(jeitos.get("sarnheim") == "patrulhar" and jeitos.get("paladino") == "parado", "comportamentos errados: %s" % jeitos)
+
+	await _conversar(m, m.npcs[ids["encapuzado"]])
+	_checar(Jogo.itens.get("chave", 0) == 1 and Jogo.tem_pedra_solar(), "o encapuzado deveria dar a chave e a pedra")
+	_checar(Jogo.eventos.has("encapuzado"), "evento do encapuzado não marcado")
+	await _conversar(m, m.npcs[ids["iselde"]])
+	_checar(Jogo.party.size() == 2 and not m.npcs.has(ids["iselde"]), "Iselde deveria entrar na party")
+
+	# Longe do jogador: o paladino não sai do lugar e a patrulha fica na linha.
+	m.pos_jogador = Vector2i(-50, -50)
+	for id in m.inimigos:
+		var d: Dictionary = m.inimigos[id]
+		var origem: Vector2i = d["origem"]
+		for i in 30:
+			m._mover_inimigos(10.0)
+			var desvio: Vector2i = d["pos"] - origem
+			if d["comportamento"] == "parado":
+				_checar(d["pos"] == origem, "inimigo parado andou")
+			elif d["comportamento"] == "patrulhar":
+				_checar(absi(desvio.x) + absi(desvio.y) <= d["distancia"] and desvio.y == 0, "patrulha saiu da linha: %s" % desvio)
+	m.queue_free()
+	print("mundo ok")
+
+
+## Lê uma conversa inteira escolhendo sempre a primeira resposta.
+func _conversar(m, npc: Dictionary) -> void:
+	m._iniciar_conversa(npc["dialogo"], npc["cue"])
+	var passos := 0
+	while m.conversa != null and passos < 100:
+		passos += 1
+		await get_tree().process_frame
+		if m.esperando_linha or m.linha_conversa == null:
+			continue
+		var linha: DialogueLine = m.linha_conversa
+		m._ir_para_linha(linha.responses[0].next_id if not linha.responses.is_empty() else linha.next_id)
+	_checar(m.conversa == null, "conversa não terminou")
 
 
 func _testar_luz() -> void:

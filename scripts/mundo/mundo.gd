@@ -8,6 +8,12 @@ const TILE := 32
 const TEMPO_PASSO := 0.14
 const ALCANCE_PERSEGUICAO := 6
 const INTERVALO_INIMIGO := 0.45
+## Inimigos pintados com letra no TileMap usam este comportamento.
+const COMPORTAMENTO_PADRAO := {"comportamento": "perseguir", "alcance": ALCANCE_PERSEGUICAO,
+	"intervalo": INTERVALO_INIMIGO, "eixo": Vector2i.RIGHT, "distancia": 3}
+## Conversas dos NPCs pintados com letra.
+const DIALOGO_ENCAPUZADO := "res://dialogos/encapuzado.dialogue"
+const DIALOGO_ISELDE := "res://dialogos/iselde.dialogue"
 
 const INIMIGO_POR_LETRA := {"C": "cruzado", "O": "oco", "F": "oca", "N": "sarnheim", "V": "paladino"}
 
@@ -40,7 +46,6 @@ var pos_jogador := Vector2i.ZERO
 var direcao := Vector2i.DOWN
 var movendo := false
 var bloqueado := false  # diálogo aberto ou batalha começando
-var tempo_inimigos := 0.0
 var tregua := 0.0  # segundos sem batalha após uma fuga
 
 var hud: Label
@@ -51,6 +56,12 @@ var nome_dialogo: Label
 var retrato_dialogo: TextureRect
 var paginas: Array = []
 var ao_fim_dialogo: Callable
+## Conversa do Dialogue Manager em andamento (null = nenhuma).
+var conversa: DialogueResource
+var linha_conversa: DialogueLine
+var esperando_linha := false
+var lista_respostas: VBoxContainer
+var resposta_escolhida := 0
 
 
 func _ready() -> void:
@@ -92,11 +103,11 @@ func _carregar_mapa() -> void:
 						add_child(pedra)
 						pedras_no_chao[pos] = pedra
 				"H":
-					_criar_npc("encapuzado", "res://assets/sprites/encapuzado.png", pos)
+					_criar_npc("encapuzado", "res://assets/sprites/encapuzado.png", pos, load(DIALOGO_ENCAPUZADO))
 					c = "."
 				"I":
 					if not Jogo.eventos.has("iselde"):
-						_criar_npc("iselde", "res://assets/sprites/protagonista2.png", pos)
+						_criar_npc("iselde", "res://assets/sprites/protagonista2.png", pos, load(DIALOGO_ISELDE))
 					c = "."
 				"D":
 					if Jogo.eventos.has("porta_%d_%d" % [x, y]):
@@ -109,6 +120,7 @@ func _carregar_mapa() -> void:
 					c = "."
 			limpa += c
 		grade.append(limpa)
+	_carregar_entidades()
 
 	jogador = _sprite_de_folha(Jogo.party[0]["folha_mapa"], pos_jogador)
 	jogador.z_index = 2
@@ -138,12 +150,44 @@ func _sprite_de_folha(caminho: String, pos: Vector2i) -> Sprite2D:
 	return no
 
 
-func _criar_inimigo(id: String, tipo: String, pos: Vector2i) -> void:
-	inimigos[id] = {"no": _sprite_de_folha(Inimigos.DADOS[tipo]["sprite_mapa"], pos), "pos": pos, "tipo": tipo, "passo": 0}
+## Entidades colocadas como nós (Entidade) na cena do mapa.
+func _carregar_entidades() -> void:
+	for no in mapa.get_children():
+		if not no is Entidade:
+			continue
+		var e: Entidade = no
+		var pos := e.celula()
+		match e.tipo:
+			Entidade.Tipo.INIMIGO:
+				var id := "%s_%s" % [mapa.name, e.name]
+				if not Jogo.inimigos_derrotados.has(id):
+					_criar_inimigo(id, e.inimigo, pos, {"comportamento": e.comportamento,
+						"alcance": e.alcance_visao, "intervalo": e.intervalo,
+						"eixo": Vector2i.RIGHT if e.direcao_patrulha == "horizontal" else Vector2i.DOWN,
+						"distancia": e.distancia_patrulha})
+			Entidade.Tipo.NPC:
+				if e.some_com_evento == "" or not Jogo.eventos.has(e.some_com_evento):
+					_criar_npc(e.id_unico(), e.folha, pos, e.dialogo, e.cue)
+			Entidade.Tipo.PEDRA_SOLAR:
+				if not Jogo.eventos.has("pedra_%d_%d" % [pos.x, pos.y]):
+					_trocar_tile(pos, "G")
+					var pedra := Sprite2D.new()
+					pedra.texture = load("res://assets/itens/pedra_solar_24.png")
+					pedra.position = Vector2(pos * TILE) + Vector2(TILE, TILE) / 2
+					pedra.z_index = 1
+					add_child(pedra)
+					pedras_no_chao[pos] = pedra
 
 
-func _criar_npc(id: String, folha: String, pos: Vector2i) -> void:
-	npcs[pos] = {"no": _sprite_de_folha(folha, pos), "id": id}
+func _criar_inimigo(id: String, tipo: String, pos: Vector2i, jeito := COMPORTAMENTO_PADRAO) -> void:
+	var dados := {"no": _sprite_de_folha(Inimigos.DADOS[tipo]["sprite_mapa"], pos), "pos": pos,
+		"tipo": tipo, "passo": 0, "tempo": 0.0, "origem": pos, "sentido": 1}
+	dados.merge(jeito)
+	inimigos[id] = dados
+
+
+func _criar_npc(id: String, folha: String, pos: Vector2i, dialogo: DialogueResource = null, cue := "start") -> void:
+	npcs[pos] = {"no": _sprite_de_folha(folha, pos), "id": id, "dialogo": dialogo, "cue": cue}
 
 
 ## Brilho aditivo sobre os feixes de luz.
@@ -187,7 +231,7 @@ func _criar_interface() -> void:
 	caixa_dialogo = PanelContainer.new()
 	caixa_dialogo.position = Vector2(40, 380)
 	caixa_dialogo.custom_minimum_size = Vector2(880, 140)
-	caixa_dialogo.add_theme_stylebox_override("panel", _estilo_painel(Color(0.05, 0.03, 0.04, 0.94)))
+	caixa_dialogo.add_theme_stylebox_override("panel", _estilo_painel(Color(0.05, 0.03, 0.04, 1.0)))
 	caixa_dialogo.visible = false
 	camada.add_child(caixa_dialogo)
 	var linha := HBoxContainer.new()
@@ -209,6 +253,9 @@ func _criar_interface() -> void:
 	texto_dialogo.custom_minimum_size = Vector2(700, 0)
 	texto_dialogo.add_theme_font_size_override("font_size", 16)
 	coluna.add_child(texto_dialogo)
+	lista_respostas = VBoxContainer.new()
+	lista_respostas.visible = false
+	coluna.add_child(lista_respostas)
 
 
 static func _estilo_painel(cor: Color) -> StyleBoxFlat:
@@ -303,6 +350,9 @@ static func _falas(lista: Array, nome: String, retrato: String) -> Array:
 # ---------------------------------------------------------------- Loop
 
 func _process(delta: float) -> void:
+	if conversa != null:
+		_controlar_conversa()
+		return
 	if caixa_dialogo.visible:
 		if Input.is_action_just_pressed("interagir"):
 			_avancar_dialogo()
@@ -311,12 +361,9 @@ func _process(delta: float) -> void:
 		return
 	tregua = maxf(0.0, tregua - delta)
 
-	tempo_inimigos += delta
-	if tempo_inimigos >= INTERVALO_INIMIGO:
-		tempo_inimigos = 0.0
-		_mover_inimigos()
-		if bloqueado:
-			return
+	_mover_inimigos(delta)
+	if bloqueado:
+		return
 
 	if Input.is_action_just_pressed("interagir"):
 		_interagir()
@@ -442,46 +489,120 @@ func _interagir() -> void:
 func _falar_com(pos: Vector2i) -> void:
 	var npc: Dictionary = npcs[pos]
 	_virar(npc["no"], -direcao, 0)
-	match npc["id"]:
-		"encapuzado":
-			if Jogo.eventos.has("encapuzado"):
-				_mostrar_dialogo({"texto": Mapas.FALA_ENCAPUZADO_DEPOIS, "nome": "???", "retrato": Mapas.RETRATO_ENCAPUZADO})
-				return
-			_mostrar_dialogo(_falas(Mapas.FALAS_ENCAPUZADO, "???", Mapas.RETRATO_ENCAPUZADO), func():
-				Jogo.eventos["encapuzado"] = true
-				Jogo.itens["chave"] = 1
-				Jogo.ganhar_pedra_solar()
-				_atualizar_hud()
-				_mostrar_dialogo("Você recebeu a Chave das celas e uma Pedra Solar (9 cargas)."))
-		"iselde":
-			_mostrar_dialogo(_falas(Mapas.FALAS_ISELDE, "Iselde", Mapas.RETRATO_ISELDE), func():
-				Jogo.eventos["iselde"] = true
-				Jogo.recrutar("iselde")
-				npc["no"].queue_free()
-				npcs.erase(pos)
-				_atualizar_hud()
-				_mostrar_dialogo("Iselde entrou na party."))
+	if npc["dialogo"] != null:
+		_iniciar_conversa(npc["dialogo"], npc["cue"])
+	else:
+		_mostrar_dialogo("...")
 
 
-func _mover_inimigos() -> void:
+# ---------------------------------------------------------------- Conversas (Dialogue Manager)
+# Os arquivos .dialogue podem chamar estas funções com "$> nome(...)".
+
+## Dá um item ao jogador. Ex.: $> dar_item("chave")
+func dar_item(id: String, quantidade := 1) -> void:
+	Jogo.itens[id] = Jogo.itens.get(id, 0) + quantidade
+	_atualizar_hud()
+
+
+## Marca que algo aconteceu. Ex.: $> marcar("falou_com_guarda")
+## Depois use "if Jogo.eventos.has("falou_com_guarda")" no diálogo.
+func marcar(evento: String) -> void:
+	Jogo.eventos[evento] = true
+
+
+## Coloca alguém na party e tira o NPC do mapa. Ex.: $> recrutar("iselde")
+func recrutar(id: String) -> void:
+	Jogo.eventos[id] = true
+	Jogo.recrutar(id)
+	for pos in npcs.keys():
+		if npcs[pos]["id"] == id:
+			npcs[pos]["no"].queue_free()
+			npcs.erase(pos)
+	_atualizar_hud()
+
+
+func _iniciar_conversa(recurso: DialogueResource, cue: String) -> void:
+	conversa = recurso
+	bloqueado = true
+	_ir_para_linha(cue)
+
+
+func _ir_para_linha(id: String) -> void:
+	esperando_linha = true
+	var linha: DialogueLine = await DialogueManager.get_next_dialogue_line(conversa, id, [self])
+	esperando_linha = false
+	if linha == null:
+		_fim_conversa()
+		return
+	linha_conversa = linha
+	resposta_escolhida = 0
+	if linha.text == "" and not linha.responses.is_empty():
+		# Só as respostas: a fala anterior continua na caixa.
+		texto_dialogo.text = texto_dialogo.text.trim_suffix("\n[Z]")
+		_mostrar_respostas()
+		return
+	nome_dialogo.text = linha.character
+	nome_dialogo.visible = linha.character != ""
+	var retrato: String = Mapas.FALANTES.get(linha.character, "")
+	retrato_dialogo.texture = load(retrato) if retrato != "" else null
+	retrato_dialogo.visible = retrato != ""
+	texto_dialogo.text = linha.text + ("" if not linha.responses.is_empty() else "\n[Z]")
+	_mostrar_respostas()
+	caixa_dialogo.visible = true
+
+
+func _mostrar_respostas() -> void:
+	for filho in lista_respostas.get_children():
+		filho.queue_free()
+	lista_respostas.visible = not linha_conversa.responses.is_empty()
+	for i in linha_conversa.responses.size():
+		var r: DialogueResponse = linha_conversa.responses[i]
+		var opcao := Label.new()
+		opcao.text = ("► " if i == resposta_escolhida else "   ") + r.text
+		opcao.add_theme_color_override("font_color", Color(0.95, 0.8, 0.4) if i == resposta_escolhida else Color(0.75, 0.7, 0.7))
+		if not r.is_allowed:
+			opcao.modulate = Color(1, 1, 1, 0.4)
+		lista_respostas.add_child(opcao)
+
+
+func _controlar_conversa() -> void:
+	if esperando_linha or linha_conversa == null:
+		return
+	var respostas := linha_conversa.responses
+	if respostas.is_empty():
+		if Input.is_action_just_pressed("interagir"):
+			_ir_para_linha(linha_conversa.next_id)
+		return
+	if Input.is_action_just_pressed("mover_cima"):
+		resposta_escolhida = (resposta_escolhida - 1 + respostas.size()) % respostas.size()
+		_mostrar_respostas()
+	elif Input.is_action_just_pressed("mover_baixo"):
+		resposta_escolhida = (resposta_escolhida + 1) % respostas.size()
+		_mostrar_respostas()
+	elif Input.is_action_just_pressed("interagir") and respostas[resposta_escolhida].is_allowed:
+		_ir_para_linha(respostas[resposta_escolhida].next_id)
+
+
+func _fim_conversa() -> void:
+	conversa = null
+	linha_conversa = null
+	caixa_dialogo.visible = false
+	lista_respostas.visible = false
+	bloqueado = false
+	_atualizar_hud()
+
+
+func _mover_inimigos(delta: float) -> void:
 	for id in inimigos.keys():
 		var dados: Dictionary = inimigos[id]
-		var pos: Vector2i = dados["pos"]
-		var dist := absi(pos.x - pos_jogador.x) + absi(pos.y - pos_jogador.y)
-		var opcoes: Array[Vector2i] = []
-		if dist <= ALCANCE_PERSEGUICAO and tregua <= 0.0:
-			var dx := signi(pos_jogador.x - pos.x)
-			var dy := signi(pos_jogador.y - pos.y)
-			if absi(pos_jogador.x - pos.x) >= absi(pos_jogador.y - pos.y):
-				opcoes = [Vector2i(dx, 0), Vector2i(0, dy)]
-			else:
-				opcoes = [Vector2i(0, dy), Vector2i(dx, 0)]
-		elif Jogo.rng.randf() < 0.35:
-			opcoes = [[Vector2i.UP, Vector2i.DOWN, Vector2i.LEFT, Vector2i.RIGHT][Jogo.rng.randi() % 4]]
-		for dir in opcoes:
+		dados["tempo"] += delta
+		if dados["tempo"] < dados["intervalo"]:
+			continue
+		dados["tempo"] = 0.0
+		for dir in _passos_do_inimigo(dados):
 			if dir == Vector2i.ZERO:
 				continue
-			var alvo := pos + dir
+			var alvo: Vector2i = dados["pos"] + dir
 			if alvo == pos_jogador:
 				if tregua <= 0.0 and not movendo:
 					_encontro(id)
@@ -494,6 +615,39 @@ func _mover_inimigos() -> void:
 				var tween := create_tween()
 				tween.tween_property(dados["no"], "position", Vector2(alvo * TILE), TEMPO_PASSO * 1.5)
 				break
+			if dados["comportamento"] == "patrulhar":
+				dados["sentido"] *= -1
+
+
+## Direções que o inimigo tenta, em ordem, conforme o comportamento.
+func _passos_do_inimigo(dados: Dictionary) -> Array[Vector2i]:
+	var pos: Vector2i = dados["pos"]
+	var jeito: String = dados["comportamento"]
+	if jeito == "parado":
+		return []
+	var dist := absi(pos.x - pos_jogador.x) + absi(pos.y - pos_jogador.y)
+	if jeito in ["perseguir", "patrulhar"] and dist <= dados["alcance"] and tregua <= 0.0:
+		var dx := signi(pos_jogador.x - pos.x)
+		var dy := signi(pos_jogador.y - pos.y)
+		if absi(pos_jogador.x - pos.x) >= absi(pos_jogador.y - pos.y):
+			return [Vector2i(dx, 0), Vector2i(0, dy)]
+		return [Vector2i(0, dy), Vector2i(dx, 0)]
+	if jeito == "patrulhar":
+		# Vai e volta pela linha, sem passar da distância a partir da origem.
+		var eixo: Vector2i = dados["eixo"]
+		var proximo: Vector2i = pos + eixo * dados["sentido"]
+		var desvio: Vector2i = proximo - dados["origem"]
+		if absi(desvio.x) + absi(desvio.y) > dados["distancia"]:
+			dados["sentido"] *= -1
+		# Volta para a linha se a perseguição o tirou dela.
+		var origem: Vector2i = dados["origem"]
+		var fora := Vector2i(origem.x - pos.x, 0) if eixo == Vector2i.DOWN else Vector2i(0, origem.y - pos.y)
+		if fora != Vector2i.ZERO:
+			return [fora.sign()]
+		return [eixo * dados["sentido"]]
+	if Jogo.rng.randf() < 0.35:
+		return [[Vector2i.UP, Vector2i.DOWN, Vector2i.LEFT, Vector2i.RIGHT][Jogo.rng.randi() % 4]]
+	return []
 
 
 func _encontro(id: String) -> void:
