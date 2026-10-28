@@ -189,21 +189,105 @@ def costas_de_frente(quadro):
     return im
 
 
+def fundo_verde_suave(arr):
+    """Verde com degradê/pontilhado e a sombra verde escura no chão, mais as faixas brancas entre os quadros."""
+    a = arr.astype(np.int32)
+    r, g, b = a[..., 0], a[..., 1], a[..., 2]
+    return ((g - r > 22) & (g - b > 15) & (g > 90)) | (a.min(axis=2) > 235)
+
+
+def abrir_rgba_verde(nome):
+    img = abrir(nome)
+    arr = np.array(img).astype(np.int32)
+    # Verde forte preso entre braço e corpo também sai.
+    verde_forte = (arr[..., 1] - arr[..., 0] > 45) & (arr[..., 1] - arr[..., 2] > 35)
+    return com_alfa(img, preencher_de_fora(fundo_verde_suave(arr)) | verde_forte)
+
+
+def quadros_andar(nome):
+    """Separa os bonecos de uma imagem com vários quadros lado a lado."""
+    rgba = abrir_rgba_verde(nome)
+    alfa = np.array(rgba)[..., 3] > 0
+    cheias = alfa.sum(axis=0) > 3
+    trechos, inicio = [], None
+    for x, v in enumerate(list(cheias) + [False]):
+        if v and inicio is None:
+            inicio = x
+        elif not v and inicio is not None:
+            if trechos and inicio - trechos[-1][1] < 8:
+                trechos[-1] = (trechos[-1][0], x)
+            else:
+                trechos.append((inicio, x))
+            inicio = None
+    quadros = []
+    for x0, x1 in trechos:
+        if x1 - x0 < 40:
+            continue
+        parte = rgba.crop((x0, 0, x1, rgba.size[1]))
+        quadros.append(parte.crop(caixa_util(np.array(parte)[..., 3])))
+    return quadros
+
+
+def passos_de_frente(boneco, virilha=492, meio=164, curta=160, longa=198, media=182, braco=10):
+    """Três quadros de caminhada de frente a partir de uma pose parada: cada
+    perna é esticada ou encolhida a partir da virilha e os antebraços
+    balançam ao contrário das pernas. Os números são da arte original (312x712)."""
+    base = np.array(boneco)
+    h, w, _ = base.shape
+
+    def fundo_perna(x0, x1):
+        return np.where(base[virilha:, x0:x1, 3].any(axis=1))[0].max()
+
+    def esticar(saida, x0, x1, y0, antes, depois, limpar=0):
+        idx = np.clip(np.round(np.arange(depois + 1) * antes / depois).astype(int), 0, antes)
+        trecho = base[y0:y0 + antes + 1, x0:x1][idx]
+        saida[y0:y0 + max(antes, depois) + 1 + limpar, x0:x1] = 0
+        saida[y0:y0 + depois + 1, x0:x1] = trecho
+
+    pe = (fundo_perna(0, meio), fundo_perna(meio, w))
+    quadros = []
+    for esq, dir_, b in ((longa, curta, braco), (media, media, 0), (curta, longa, -braco)):
+        out = base.copy()
+        esticar(out, 0, meio, virilha, pe[0], esq)
+        esticar(out, meio, w, virilha, pe[1], dir_)
+        for x0, x1, d in ((0, 96, b), (235, w, -b)):
+            y0 = 300
+            linhas = np.where(base[y0:virilha - 12, x0:x1, 3].any(axis=1))[0]
+            fim = linhas.max()
+            esticar(out, x0, x1, y0, fim, fim + d, limpar=8)
+        img = Image.fromarray(out)
+        quadros.append(img.crop(caixa_util(np.array(img)[..., 3])))
+    return quadros
+
+
+def espelhar(quadros):
+    return [q.transpose(Image.FLIP_LEFT_RIGHT) for q in quadros]
+
+
+def folha_de_quadros(linhas, altura=Q - 4):
+    """Como montar_folha, mas recebe as imagens já recortadas (4 linhas de 3)."""
+    quadros = {(r, c): q for r, linha in enumerate(linhas) for c, q in enumerate(linha)}
+    return montar_folha(quadros, [[(r, c, False) for c in range(3)] for r in range(4)], altura)
+
+
+def protagonistas():
+    # Protagonistas: caminhadas novas do Carlos (uma imagem por direção, com
+    # 4 quadros lado a lado em fundo verde). A esquerda é o lado espelhado.
+    # O Aren só tinha uma pose de frente; os passos de frente saem de passos_de_frente().
+    lado = quadros_andar("protagonista_andar_lado.jpg")
+    costas_ = quadros_andar("protagonista_andar_costas.jpg")
+    frente_ = passos_de_frente(abrir_rgba_verde("protagonista_andar_frente.png"))
+    salvar(folha_de_quadros([frente_, espelhar(lado[:3]), lado[:3], [costas_[1], costas_[0], costas_[2]]]),
+        "sprites/protagonista.png")
+    lado = quadros_andar("protagonista2_andar_lado.jpg")
+    salvar(folha_de_quadros([quadros_andar("protagonista2_andar_frente.jpg")[:3], espelhar(lado[:3]), lado[:3],
+        quadros_andar("protagonista2_andar_costas.jpg")[:3]]), "sprites/protagonista2.png")
+
+
 def folhas_de_mapa():
     frente = [(0, 0, False), (0, 1, False), (0, 2, False)]
 
-    # Protagonista: a última linha da folha veio de frente; as costas são derivadas.
-    img = abrir("protagonista_folha.jpg")
-    q = recortar_quadros(img, preencher_de_fora(fundo_xadrez_claro(np.array(img))), 4, 3)
-    folha = montar_folha(q, [frente, [(1, i, False) for i in range(3)], [(2, i, False) for i in range(3)], frente])
-    for i in range(3):
-        quadro = folha.crop((i * Q, 0, i * Q + Q, Q))
-        folha.paste(costas_de_frente(quadro), (i * Q, 3 * Q))
-    salvar(folha, "sprites/protagonista.png")
-
-    img = abrir("protagonista2_folha.jpg")
-    q = recortar_quadros(img, preencher_de_fora(fundo_xadrez_medio(np.array(img))), 4, 3)
-    salvar(montar_folha(q, [[(r, i, False) for i in range(3)] for r in range(4)]), "sprites/protagonista2.png")
+    protagonistas()
 
     # Sarnheim v2: frente, lado (olhando para a esquerda) e costas; a direita é espelhada.
     img = abrir("sarnheim_folha_v2.jpg")
@@ -553,6 +637,103 @@ def tiles():
     salvar(fundo.resize((960, 540), Image.LANCZOS), "batalha/fundo_prisao.png")
 
 
+# Folha nova de tiles da prisão (2026-10-28): 8 colunas x 3 linhas em fundo
+# cinza. Substitui os tiles de mesmo nome e acrescenta os que não existiam.
+COLUNAS_V2 = [(3, 175), (175, 347), (347, 518), (518, 688), (688, 858), (858, 1029), (1029, 1201), (1201, 1374)]
+LINHAS_V2 = [(0, 184), (184, 384), (384, 552)]
+NOMES_V2 = [
+    ["chao_rachado", "chao_musgo", "chao_poca", "parede2", "parede", "grade", "cela_aberta", "cela_fechada"],
+    ["cama", "correntes", "esqueleto", "barril", "caixa", "balde", "escada", "altar"],
+    ["parede_tocha", "chao_sol", "chao", "parede_musgo", "parede_musgo2", "chao_correntes", "parede_janela", "parede_sol"],
+]
+# Objetos soltos: recortados do fundo e desenhados sobre o chão novo.
+OBJETOS_V2 = {"cama", "barril", "caixa", "balde", "altar"}
+
+
+def tiles_v2():
+    arr = np.array(abrir("tiles_prisao_v2.jpg")).astype(np.int32)
+    fundo = np.abs(arr - arr[700, 700]).sum(axis=2) <= 30
+    tiles_feitos = {}
+    for r, (y0, y1) in enumerate(LINHAS_V2):
+        for c, (x0, x1) in enumerate(COLUNAS_V2):
+            nome = NOMES_V2[r][c]
+            celula = arr[y0:y1, x0:x1]
+            cheio = ~fundo[y0:y1, x0:x1]
+            if nome in OBJETOS_V2:
+                f = preencher_de_fora(fundo[y0:y1, x0:x1])
+                rgba = com_alfa(Image.fromarray(celula.astype(np.uint8)), f)
+                tiles_feitos[nome] = rgba.crop(caixa_util(np.array(rgba)[..., 3]))
+                continue
+            linhas = np.where(cheio.sum(axis=1) > cheio.shape[1] * 0.5)[0]
+            colunas = np.where(cheio.sum(axis=0) > cheio.shape[0] * 0.5)[0]
+            fim = linhas[-1] + 1
+            if nome == "cela_aberta":
+                fim = min(fim, 180 - y0)  # a porta aberta passa da borda de baixo
+            miolo = celula[linhas[0] + 3:fim - 3, colunas[0] + 3:colunas[-1] - 2]
+            tiles_feitos[nome] = Image.fromarray(miolo.astype(np.uint8)).resize((Q, Q), Image.LANCZOS).convert("RGBA")
+    chao = tiles_feitos["chao"]
+    for nome, img in tiles_feitos.items():
+        if nome in OBJETOS_V2:
+            escala = (Q - 4) / max(img.size)
+            obj = reduzir(img, escala)
+            tile = chao.copy()
+            tile.alpha_composite(obj, ((Q - obj.size[0]) // 2, Q - obj.size[1] - 2))
+            img = tile
+        salvar(img.convert("RGB"), f"tiles/{nome}.png")
+    # Variações antigas do chão passam a usar a pedra nova, para não destoar.
+    salvar(tiles_feitos["chao_musgo"].convert("RGB"), "tiles/chao2.png")
+    salvar(tiles_feitos["chao_poca"].convert("RGB"), "tiles/chao_rachado2.png")
+    salvar(tiles_feitos["chao_rachado"].transpose(Image.FLIP_LEFT_RIGHT).convert("RGB"), "tiles/chao_rachado3.png")
+    # Sangue: só a mancha vermelha do tile antigo, por cima do chão novo.
+    antigo = np.array(Image.open(DESTINO / "tiles" / "sangue.png").convert("RGB")).astype(np.int32)
+    mancha = (antigo[..., 0] > antigo[..., 1] + 40) & (antigo[..., 0] > antigo[..., 2] + 40)
+    if mancha.any():
+        sangue = np.array(chao.convert("RGB"))
+        sangue[mancha] = antigo[mancha]
+        salvar(Image.fromarray(sangue), "tiles/sangue.png")
+
+
+def portas():
+    """Folha de portas (8 quadros por linha em fundo quadriculado): a cela
+    abrindo vira assets/tiles/cela_porta_anim.png, 8 quadros de 64x64."""
+    arr = np.array(abrir("portas_folha.jpg")).astype(np.int32)
+    h, w, _ = arr.shape
+    cinza = np.abs(arr - 128).max(axis=2) < 14
+    escuro = arr.max(axis=2) < 115
+    vert = np.roll(cinza, 3, 0) & np.roll(cinza, -3, 0)
+    horiz = np.roll(cinza, 3, 1) & np.roll(cinza, -3, 1)
+    fundo = cinza.copy()
+    for x in range(w):
+        if (escuro[:, x] & horiz[:, x]).sum() > 150:
+            fundo[:, x] |= horiz[:, x]
+    for y in range(h):
+        if (escuro[y] & vert[y]).sum() > 250:
+            fundo[y] |= vert[y]
+    linhas = [(0, 195), (195, 385), (385, 575), (575, 768)]
+    nomes = ["cela_porta_anim", None, "porta_madeira_anim", None]
+    for (y0, y1), nome in zip(linhas, nomes):
+        if not nome:
+            continue
+        celulas = []
+        for c in range(8):
+            f = preencher_de_fora(fundo[y0:y1, c * 172:(c + 1) * 172])
+            f[:3] = f[-3:] = True
+            f[:, :3] = f[:, -3:] = True
+            celulas.append(com_alfa(Image.fromarray(arr[y0:y1, c * 172:(c + 1) * 172].astype(np.uint8)), f))
+        # Mesma janela para todos os quadros, para a animação não tremer.
+        caixas = [caixa_util(np.array(cel)[..., 3], 5) for cel in celulas]
+        x0 = min(b[0] for b in caixas); yy0 = min(b[1] for b in caixas)
+        x1 = max(b[2] for b in caixas); yy1 = max(b[3] for b in caixas)
+        fechada = caixas[0]
+        escala = (Q - 2) / (fechada[3] - fechada[1])
+        tira = Image.new("RGBA", (8 * Q, Q), (0, 0, 0, 0))
+        for i, cel in enumerate(celulas):
+            q = reduzir(cel.crop((x0, yy0, x1, yy1)), escala)
+            centro = round(((fechada[0] + fechada[2]) / 2 - x0) * escala)
+            tira.alpha_composite(q, (i * Q + Q // 2 - centro, Q - q.size[1]))
+        salvar(tira, f"tiles/{nome}.png")
+
+
 # ------------------------------------------------------------ efeitos e itens
 
 def fundo_para_preto(img, piso=62):
@@ -613,4 +794,6 @@ if __name__ == "__main__":
     costas()
     ocos()
     tiles()
+    tiles_v2()
+    portas()
     efeitos()

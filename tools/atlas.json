@@ -155,6 +155,48 @@
    "letra": ".",
    "x": 1,
    "y": 3
+  },
+  {
+   "nome": "chao_musgo",
+   "letra": ".",
+   "x": 2,
+   "y": 3
+  },
+  {
+   "nome": "chao_poca",
+   "letra": ".",
+   "x": 3,
+   "y": 3
+  },
+  {
+   "nome": "chao_correntes",
+   "letra": ".",
+   "x": 4,
+   "y": 3
+  },
+  {
+   "nome": "parede_musgo",
+   "letra": "#",
+   "x": 5,
+   "y": 3
+  },
+  {
+   "nome": "parede_musgo2",
+   "letra": "#",
+   "x": 6,
+   "y": 3
+  },
+  {
+   "nome": "parede_janela",
+   "letra": "#",
+   "x": 7,
+   "y": 3
+  },
+  {
+   "nome": "parede_sol",
+   "letra": "#",
+   "x": 0,
+   "y": 4
   }
  ],
  "entidades": [

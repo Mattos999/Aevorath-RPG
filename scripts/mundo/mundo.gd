@@ -478,12 +478,30 @@ func _interagir() -> void:
 				if Jogo.itens.get("chave", 0) > 0:
 					Jogo.eventos["porta_%d_%d" % [alvo.x, alvo.y]] = true
 					_trocar_tile(alvo, "d")
-					mapa.trocar_terreno(alvo, "d")
+					_animar_porta(alvo)
 					_mostrar_dialogo("A chave gira com um rangido. A cela se abre.")
 				else:
 					_mostrar_dialogo("A porta da cela está trancada.")
 			"G":
 				_pegar_pedra(alvo)
+
+
+## Toca a porta da cela abrindo (quadros 4 a 7 da tira) por cima do tile
+## fechado e só então troca o tile para a cela aberta.
+func _animar_porta(pos: Vector2i) -> void:
+	var porta := Sprite2D.new()
+	porta.texture = load("res://assets/tiles/cela_porta_anim.png")
+	porta.hframes = 8
+	porta.frame = 4
+	porta.centered = false
+	porta.position = Vector2(pos * TILE)
+	porta.z_index = 1
+	add_child(porta)
+	var tween := create_tween()
+	tween.tween_property(porta, "frame", 7, 0.45).from(4)
+	tween.tween_callback(func() -> void:
+		mapa.trocar_terreno(pos, "d")
+		porta.queue_free())
 
 
 func _falar_com(pos: Vector2i) -> void:
