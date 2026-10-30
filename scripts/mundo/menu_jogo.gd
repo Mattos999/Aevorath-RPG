@@ -357,8 +357,7 @@ func _atualizar_magias() -> void:
 			elif Habilidades.PLANEJADAS.has(hid):
 				var p: Array = Habilidades.PLANEJADAS[hid]
 				t += "[color=#8c8080]• %s (em breve): %s[/color]\n" % [p[0], p[1]]
-		var passiva: Array = Habilidades.PASSIVAS[sol]
-		t += "[color=#8c8080]• Passiva, %s (em breve): %s[/color]\n" % [passiva[0], passiva[1]]
+		t += Habilidades.linha_passiva(sol)
 	elif de_classe.is_empty():
 		t += "[color=#8c8080]%s não usa magia.[/color]\n" % m["nome"]
 	texto_magias.text = t

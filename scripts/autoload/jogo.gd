@@ -33,7 +33,7 @@ const SEXOS := {
 const CLASSES := {
 	"guerreiro": {
 		"nome": "Guerreiro",
-		"descricao": "Luta com armas e espadas. Não usa magia, então não depende da luz.",
+		"descricao": "Luta com armas e espadas. As técnicas dele não dependem da luz.",
 		"hp": 70, "mp": 12, "ataque": 9, "defesa": 0, "agilidade": 9,
 		"habilidades": ["corte_preciso", "golpe_destruidor", "grito_guerra", "postura_ferro"],
 		"equipamento": {"arma": "espada_enferrujada", "corpo": "panos_velhos", "pes": "calcados_velhos"},
@@ -85,7 +85,7 @@ var rng := RandomNumberGenerator.new()
 
 
 ## Escolhas da tela de criação (usadas de novo ao recomeçar).
-var criacao := {"nome": "Aren", "sexo": "masculino", "classe": "guerreiro"}
+var criacao := {"nome": "Aren", "sexo": "masculino", "classe": "guerreiro", "sol": "vida"}
 
 
 func _ready() -> void:
@@ -93,28 +93,33 @@ func _ready() -> void:
 	novo_jogo()
 
 
-## Monta o protagonista a partir das escolhas da tela de criação.
-static func criar_heroi(nome: String, sexo: String, classe: String) -> Dictionary:
+## Monta o protagonista a partir das escolhas da tela de criação. O Sol
+## seguido soma as magias dele (as que já existem na batalha) às da classe.
+static func criar_heroi(nome: String, sexo: String, classe: String, sol := "") -> Dictionary:
 	var s: Dictionary = SEXOS[sexo]
 	var c: Dictionary = CLASSES[classe]
 	var hp_partes := {}
 	for parte in PROPORCAO_PARTES:
 		hp_partes[parte] = roundi(c["hp"] * PROPORCAO_PARTES[parte])
+	var habilidades: Array = c["habilidades"].duplicate()
+	for hid in Habilidades.MAGIAS_POR_SOL.get(sol, []):
+		if Habilidades.DADOS.has(hid) and not hid in habilidades:
+			habilidades.append(hid)
 	return {
 		"id": "heroi", "nome": nome.strip_edges() if nome.strip_edges() != "" else s["nome_padrao"],
-		"sexo": sexo, "titulo": "Prisioneiro", "classe": c["nome"], "id_classe": classe, "sol": "",
+		"sexo": sexo, "titulo": "Prisioneiro", "classe": c["nome"], "id_classe": classe, "sol": sol,
 		"hp": c["hp"], "mp": c["mp"], "ataque": c["ataque"], "defesa": c["defesa"], "agilidade": c["agilidade"],
 		"textura": s["textura"], "costas": s["costas"], "folha_mapa": s["folha_mapa"],
-		"habilidades": c["habilidades"].duplicate(), "equipamento": c["equipamento"].duplicate(),
+		"habilidades": habilidades, "equipamento": c["equipamento"].duplicate(),
 		"hp_partes": hp_partes,
 	}
 
 
 ## Começa do zero. Sem argumentos, repete as últimas escolhas da criação.
-func novo_jogo(nome := "", sexo := "", classe := "") -> void:
+func novo_jogo(nome := "", sexo := "", classe := "", sol := "") -> void:
 	if sexo != "":
-		criacao = {"nome": nome, "sexo": sexo, "classe": classe}
-	party = [criar_heroi(criacao["nome"], criacao["sexo"], criacao["classe"])]
+		criacao = {"nome": nome, "sexo": sexo, "classe": classe, "sol": sol}
+	party = [criar_heroi(criacao["nome"], criacao["sexo"], criacao["classe"], criacao["sol"])]
 	itens = {"bandagem": 2}
 	# Provisório, para testar o inventário até os itens estarem no mapa.
 	inventario.assign(["espada_prata", "machado_guerra", "armadura_couro", "bota_couro", "colar_sol", "brinco_lebre"])
@@ -143,8 +148,8 @@ func party_viva() -> bool:
 	return false
 
 
-## Altar dos Nove Sóis: restaura HP/MP e estanca sangramento dos vivos.
-## Membros perdidos não voltam.
+## Altar dos Nove Sóis: restaura HP/MP, estanca sangramento dos vivos e
+## recarrega a passiva Nunca desistir. Membros perdidos não voltam.
 func descansar() -> void:
 	for membro in party:
 		if membro.get("hp_atual", membro["hp"]) <= 0:
@@ -152,6 +157,7 @@ func descansar() -> void:
 		membro["hp_atual"] = membro["hp"]
 		membro["mp_atual"] = membro["mp"]
 		membro["sangrando"] = false
+		membro["nunca_desistir_usado"] = false
 
 
 func pedir_batalha(inimigo_id: String, id_no_mapa: String) -> void:

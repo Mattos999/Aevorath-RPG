@@ -506,6 +506,7 @@ func _turno(c: Combatente) -> void:
 	if sangue > 0:
 		_registrar("%s perde %d HP sangrando." % [c.nome, sangue])
 		await _pausa(0.6)
+		await _avisar_resistencia(c)
 		if not c.vivo():
 			_registrar("%s sangrou até a morte." % c.nome)
 			await _pausa()
@@ -532,6 +533,7 @@ func _aplicar_estados(c: Combatente) -> bool:
 		match nome:
 			"veneno":
 				c.hp = maxi(0, c.hp - e["valor"])
+				c.nunca_desistir()
 				_registrar("%s sofre %d de dano da doença." % [c.nome, e["valor"]])
 				_efeito("luz", _pos_alvo(c, "torso"), 0.6, 0.8, Color(0.5, 0.9, 0.2))
 			"regeneracao":
@@ -540,6 +542,7 @@ func _aplicar_estados(c: Combatente) -> bool:
 					_registrar("%s regenera %d HP." % [c.nome, curado])
 			"paralisia":
 				c.hp = maxi(0, c.hp - e["valor"])
+				c.nunca_desistir()
 				_registrar("Os espinhos prendem %s: %d de dano. Não consegue se mover." % [c.nome, e["valor"]])
 				_efeito("corte", _pos_alvo(c, "pernas"), 0.7, 0.8, Color(0.4, 0.9, 0.3))
 				age = false
@@ -570,11 +573,22 @@ func _aplicar_estados(c: Combatente) -> bool:
 			if e["turnos"] == 0:
 				c.estados.erase(nome)
 		await _pausa(0.5)
+		await _avisar_resistencia(c)
 		if not c.vivo():
 			_registrar("%s cai." % c.nome)
 			await _pausa()
 			return false
 	return age
+
+
+## Avisa quando a passiva Nunca desistir (Sol da Vida) acabou de salvar `c`.
+func _avisar_resistencia(c: Combatente) -> void:
+	if not c.resistiu:
+		return
+	c.resistiu = false
+	_registrar("%s chega ao limite, mas se recusa a cair! (Nunca desistir)" % c.nome)
+	_efeito("luz", _pos_alvo(c, "torso"), 1.2, 1.0, Color(1.0, 0.85, 0.5))
+	await _pausa(0.6)
 
 
 func _dano_base(c: Combatente, mult := 1.0, base := 0, com_arma := true) -> int:
@@ -702,6 +716,9 @@ func _usar_habilidade(c: Combatente, acao: Dictionary) -> void:
 			if rng.randf() > h.get("chance", 1.0):
 				_registrar("%s resiste a %s." % [alvo.nome, h["nome"]])
 				continue
+			if alvo.imune_a(h["estado"]["nome"]):
+				_registrar("%s é imune a %s." % [alvo.nome, h["nome"]])
+				continue
 			var e: Dictionary = h["estado"].duplicate()
 			if e["nome"] in ["veneno", "paralisia"]:
 				e["valor"] = maxi(1, roundi(e["valor"] * forca))
@@ -789,6 +806,7 @@ func _golpear(alvo: Combatente, parte: String, dano: int, precisao := 1.0, ignor
 			_pose(alvo, "dano", 0.7)
 			_piscar(figuras[alvo])
 	_registrar("%d de dano em %s." % [r["dano"], alvo.nome])
+	await _avisar_resistencia(alvo)
 	if r["decepou"]:
 		await _pausa(0.5)
 		if parte == "cabeca":

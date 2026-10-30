@@ -18,7 +18,7 @@ tile_map_data = PackedByteArray("AAAAAAAAAAACAAEAAAABAAAAAAAAAAEAAAACAAAAAAAAAAE
 tile_set = ExtResource("2_sxltr")
 
 [node name="Entidades" type="TileMapLayer" parent="." unique_id=2014016446]
-tile_map_data = PackedByteArray("AAAbAAEA//////////8CAAIAAQAAAAAAAAAHAAIA//////////8LAAIA//////////8BAAMA//////////8YAAMA//////////8GAAYA//////////8TAAcA//////////8=")
+tile_map_data = PackedByteArray("AAABAAEAAQAAAAAAAAA=")
 tile_set = ExtResource("2_sxltr")
 
 [node name="Paladino1" type="Node2D" parent="." unique_id=675289451]

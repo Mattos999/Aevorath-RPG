@@ -24,9 +24,10 @@ func _ready() -> void:
 		for inimigo in ["oco", "oca", "cruzado", "sarnheim", "paladino"]:
 			for i in 6:
 				n += 1
-				Jogo.novo_jogo("Teste", "masculino" if n % 2 == 0 else "feminino", classes[n % classes.size()])
+				var sois := Habilidades.SOIS_INICIAIS.keys()
+				Jogo.novo_jogo("Teste", "masculino" if n % 2 == 0 else "feminino", classes[n % classes.size()], sois[n % sois.size()])
 				if i % 2 == 1:
-					Jogo.party.append(Jogo.criar_heroi("Segundo", "feminino", classes[(n + 1) % classes.size()]))
+					Jogo.party.append(Jogo.criar_heroi("Segundo", "feminino", classes[(n + 1) % classes.size()], sois[(n + 3) % sois.size()]))
 				if i >= 3:
 					Jogo.ganhar_pedra_solar()
 				Jogo.minutos = 12 * 60 if i % 3 != 2 else 23 * 60
@@ -153,17 +154,19 @@ func _testar_criacao() -> void:
 	var tela := CriacaoPersonagem.new()
 	add_child(tela)
 	var escolha := []
-	tela.concluida.connect(func(nome, sexo, classe): escolha.assign([nome, sexo, classe]))
+	tela.concluida.connect(func(nome, sexo, classe, sol): escolha.assign([nome, sexo, classe, sol]))
 	tela.botoes_sexo["feminino"].pressed.emit()
 	_checar(tela.campo_nome.text == "Iselde", "nome padrão deveria seguir o sexo")
 	tela.campo_nome.text = "  Lyra "
 	tela.botoes_classe["bruxo"].pressed.emit()
+	tela.botoes_sol["verde"].pressed.emit()
 	tela.comecar()
-	_checar(escolha == ["Lyra", "feminino", "bruxo"], "criação devolveu %s" % [escolha])
-	Jogo.novo_jogo(escolha[0], escolha[1], escolha[2])
+	_checar(escolha == ["Lyra", "feminino", "bruxo", "verde"], "criação devolveu %s" % [escolha])
+	Jogo.novo_jogo(escolha[0], escolha[1], escolha[2], escolha[3])
 	var heroi: Dictionary = Jogo.party[0]
 	_checar(Jogo.party.size() == 1 and heroi["nome"] == "Lyra" and heroi["classe"] == "Bruxo", "party errada: %s" % [heroi])
 	_checar(heroi["folha_mapa"].ends_with("protagonista2.png") and "sangria" in heroi["habilidades"], "arte ou magias erradas")
+	_checar(heroi["sol"] == "verde" and "emaranhar" in heroi["habilidades"], "o Sol Verde deveria dar Emaranhar")
 	for id in Jogo.CLASSES:
 		for hid in Jogo.CLASSES[id]["habilidades"]:
 			_checar(Habilidades.DADOS.has(hid), "habilidade %s da classe %s não existe" % [hid, id])
@@ -190,6 +193,16 @@ func _testar_criacao() -> void:
 	_checar(Jogo.cargas_solares() == cargas, "sangria não deveria gastar a Pedra Solar")
 	b.queue_free()
 	await get_tree().process_frame
+	# Passivas: Nunca desistir (Vida) salva uma vez por descanso; Morte e Medo dão imunidade.
+	var rng := RandomNumberGenerator.new()
+	var vida := Combatente.criar(Jogo.criar_heroi("V", "masculino", "guerreiro", "vida"), true)
+	vida.receber_golpe("torso", 999, rng, 1.0, true)
+	_checar(vida.hp == 1 and vida.resistiu, "Nunca desistir deveria deixar com 1 HP")
+	vida.receber_golpe("torso", 999, rng, 1.0, true)
+	_checar(not vida.vivo(), "Nunca desistir só vale uma vez")
+	_checar(vida.para_dados({})["nunca_desistir_usado"], "o uso da passiva deveria ficar guardado até descansar")
+	var morte := Combatente.criar(Jogo.criar_heroi("M", "masculino", "mago", "morte"), true)
+	_checar(morte.imune_a("veneno") and not morte.imune_a("medo"), "Senhor da Peste: imune só a doença")
 	print("criação ok")
 
 
