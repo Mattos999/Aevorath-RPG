@@ -15,14 +15,18 @@ func _ready() -> void:
 	_testar_equipamento()
 	await _testar_menu()
 	await _testar_mundo()
-	# Varia luz, Pedra Solar e tamanho da party para exercitar a regra da magia.
+	await _testar_criacao()
+	# Varia classe, luz, Pedra Solar e tamanho da party para exercitar a regra da magia.
 	var luzes := ["escuro", "sol", "lua"]
+	var classes := Jogo.CLASSES.keys()
+	var n := 0
 	for aleatorio in [false, true]:
 		for inimigo in ["oco", "oca", "cruzado", "sarnheim", "paladino"]:
 			for i in 6:
-				Jogo.novo_jogo()
+				n += 1
+				Jogo.novo_jogo("Teste", "masculino" if n % 2 == 0 else "feminino", classes[n % classes.size()])
 				if i % 2 == 1:
-					Jogo.recrutar("iselde")
+					Jogo.party.append(Jogo.criar_heroi("Segundo", "feminino", classes[(n + 1) % classes.size()]))
 				if i >= 3:
 					Jogo.ganhar_pedra_solar()
 				Jogo.minutos = 12 * 60 if i % 3 != 2 else 23 * 60
@@ -97,7 +101,7 @@ func _testar_mundo() -> void:
 	var ids := {}
 	for pos in m.npcs:
 		ids[m.npcs[pos]["id"]] = pos
-	_checar(ids.has("encapuzado") and ids.has("iselde"), "NPCs do mapa não carregaram: %s" % [ids.keys()])
+	_checar(ids.has("encapuzado") and not ids.has("iselde"), "NPCs do mapa errados: %s" % [ids.keys()])
 	_checar(m.pedras_no_chao.size() == 1, "a Pedra Solar do chão não carregou")
 	var jeitos := {}
 	for id in m.inimigos:
@@ -107,8 +111,6 @@ func _testar_mundo() -> void:
 	await _conversar(m, m.npcs[ids["encapuzado"]])
 	_checar(Jogo.itens.get("chave", 0) == 1 and Jogo.tem_pedra_solar(), "o encapuzado deveria dar a chave e a pedra")
 	_checar(Jogo.eventos.has("encapuzado"), "evento do encapuzado não marcado")
-	await _conversar(m, m.npcs[ids["iselde"]])
-	_checar(Jogo.party.size() == 2 and not m.npcs.has(ids["iselde"]), "Iselde deveria entrar na party")
 
 	# Longe do jogador: o paladino não sai do lugar e a patrulha fica na linha.
 	m.pos_jogador = Vector2i(-50, -50)
@@ -127,7 +129,9 @@ func _testar_mundo() -> void:
 
 
 ## Lê uma conversa inteira escolhendo sempre a primeira resposta.
-func _conversar(m, npc: Dictionary) -> void:
+## Retorna os nomes de quem falou.
+func _conversar(m, npc: Dictionary) -> Array:
+	var falantes := []
 	m._iniciar_conversa(npc["dialogo"], npc["cue"])
 	var passos := 0
 	while m.conversa != null and passos < 100:
@@ -136,8 +140,57 @@ func _conversar(m, npc: Dictionary) -> void:
 		if m.esperando_linha or m.linha_conversa == null:
 			continue
 		var linha: DialogueLine = m.linha_conversa
+		if not linha.character in falantes:
+			falantes.append(linha.character)
 		m._ir_para_linha(linha.responses[0].next_id if not linha.responses.is_empty() else linha.next_id)
 	_checar(m.conversa == null, "conversa não terminou")
+	return falantes
+
+
+## Tela de criação: o personagem escolhido vira a party (só ele) e aparece
+## nos diálogos com o nome dado.
+func _testar_criacao() -> void:
+	var tela := CriacaoPersonagem.new()
+	add_child(tela)
+	var escolha := []
+	tela.concluida.connect(func(nome, sexo, classe): escolha.assign([nome, sexo, classe]))
+	tela.botoes_sexo["feminino"].pressed.emit()
+	_checar(tela.campo_nome.text == "Iselde", "nome padrão deveria seguir o sexo")
+	tela.campo_nome.text = "  Lyra "
+	tela.botoes_classe["bruxo"].pressed.emit()
+	tela.comecar()
+	_checar(escolha == ["Lyra", "feminino", "bruxo"], "criação devolveu %s" % [escolha])
+	Jogo.novo_jogo(escolha[0], escolha[1], escolha[2])
+	var heroi: Dictionary = Jogo.party[0]
+	_checar(Jogo.party.size() == 1 and heroi["nome"] == "Lyra" and heroi["classe"] == "Bruxo", "party errada: %s" % [heroi])
+	_checar(heroi["folha_mapa"].ends_with("protagonista2.png") and "sangria" in heroi["habilidades"], "arte ou magias erradas")
+	for id in Jogo.CLASSES:
+		for hid in Jogo.CLASSES[id]["habilidades"]:
+			_checar(Habilidades.DADOS.has(hid), "habilidade %s da classe %s não existe" % [hid, id])
+	var m = load("res://scenes/mundo.tscn").instantiate()
+	m.visao_3d = false
+	add_child(m)
+	await get_tree().process_frame
+	for pos in m.npcs:
+		if m.npcs[pos]["id"] == "encapuzado":
+			var falantes: Array = await _conversar(m, m.npcs[pos])
+			_checar("Lyra" in falantes, "o diálogo deveria usar o nome escolhido: %s" % [falantes])
+			_checar(Mapas.retrato_de("Lyra") == heroi["textura"], "retrato do protagonista no diálogo")
+	m.queue_free()
+	# Magia de sangue: funciona no escuro sem Pedra Solar e custa HP.
+	var b := CENA_BATALHA.instantiate()
+	b.inimigo_id = "oco"
+	Jogo.luz_batalha = "escuro"
+	add_child(b)
+	var bruxo: Combatente = b.party[0]
+	var hp_antes := bruxo.hp
+	var cargas := Jogo.cargas_solares()
+	await b._usar_habilidade(bruxo, {"id": "sangria", "parte": "torso"})
+	_checar(bruxo.hp == hp_antes - 6, "Sangria deveria custar 6 HP")
+	_checar(Jogo.cargas_solares() == cargas, "sangria não deveria gastar a Pedra Solar")
+	b.queue_free()
+	await get_tree().process_frame
+	print("criação ok")
 
 
 func _testar_luz() -> void:
@@ -183,8 +236,9 @@ func _party_de_teste() -> void:
 	for membro in Jogo.party:
 		membro["habilidades"] = todas
 		membro["mp"] = 60
+	Jogo.inventario.append_array(["brinco_lebre", "colar_sol"])
 	Jogo.equipar(Jogo.party[0], "brinco_lebre")
-	Jogo.equipar(Jogo.party[1], "colar_sol")
+	Jogo.equipar(Jogo.party[-1], "colar_sol")
 
 
 func _testar_equipamento() -> void:

@@ -1,6 +1,6 @@
 extends Node
-## Troca entre o mapa (Mundo) e a batalha. O Mundo fica guardado fora da
-## árvore durante a batalha para manter posições e inimigos.
+## Troca entre a criação de personagem, o mapa (Mundo) e a batalha. O Mundo
+## fica guardado fora da árvore durante a batalha para manter posições e inimigos.
 
 const CENA_MUNDO := preload("res://scenes/mundo.tscn")
 const CENA_BATALHA := preload("res://scenes/batalha.tscn")
@@ -19,7 +19,16 @@ func _ready() -> void:
 		mundo = CENA_MUNDO.instantiate()
 		_iniciar_batalha(inimigo, "")
 	else:
-		_ir_para_mundo()
+		_criar_personagem()
+
+
+## Tela de criação; ao confirmar, começa um jogo novo com o personagem escolhido.
+func _criar_personagem() -> void:
+	var tela := CriacaoPersonagem.new()
+	tela.concluida.connect(func(nome: String, sexo: String, classe: String) -> void:
+		Jogo.novo_jogo(nome, sexo, classe)
+		_ir_para_mundo())
+	add_child(tela)
 
 
 func _ir_para_mundo() -> void:
@@ -73,7 +82,7 @@ func _mostrar_fim_de_jogo() -> void:
 	while not Input.is_action_just_pressed("interagir"):
 		await get_tree().process_frame
 	tela.queue_free()
-	_ir_para_mundo()
+	_criar_personagem()
 
 
 func _exit_tree() -> void:

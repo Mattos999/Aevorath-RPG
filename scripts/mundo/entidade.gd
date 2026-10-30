@@ -37,7 +37,7 @@ const FOLHA_PEDRA := "res://assets/itens/pedra_solar_48.png"
 @export_range(1, 20) var distancia_patrulha := 3
 
 @export_group("NPC")
-## Nome usado nos eventos (ex.: "iselde"). Vazio = nome do nó.
+## Nome usado nos eventos (ex.: "encapuzado"). Vazio = nome do nó.
 @export var id_npc := ""
 @export_file("*.png") var folha := "res://assets/sprites/encapuzado.png":
 	set(valor):

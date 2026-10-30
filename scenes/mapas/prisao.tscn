@@ -3,7 +3,6 @@
 [ext_resource type="Script" path="res://scripts/mundo/mapa_cena.gd" id="1_ufc2v"]
 [ext_resource type="TileSet" path="res://assets/tiles/tileset.tres" id="2_sxltr"]
 [ext_resource type="Script" path="res://scripts/mundo/entidade.gd" id="3_jrhwh"]
-[ext_resource type="Resource" path="res://dialogos/iselde.dialogue" id="4_y447c"]
 [ext_resource type="Resource" path="res://dialogos/encapuzado.dialogue" id="5_0sjs0"]
 
 [node name="Prisao" type="Node2D" unique_id=1935049446]
@@ -32,15 +31,6 @@ comportamento = "parado"
 position = Vector2(448, 128)
 script = ExtResource("3_jrhwh")
 tipo = 2
-
-[node name="Iselde" type="Node2D" parent="." unique_id=974390825]
-position = Vector2(704, 128)
-script = ExtResource("3_jrhwh")
-tipo = 1
-id_npc = "iselde"
-folha = "res://assets/sprites/protagonista2.png"
-dialogo = ExtResource("4_y447c")
-some_com_evento = "iselde"
 
 [node name="Encapuzado" type="Node2D" parent="." unique_id=1424510855]
 position = Vector2(64, 192)

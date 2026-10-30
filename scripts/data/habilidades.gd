@@ -12,6 +12,11 @@ class_name Habilidades
 ## e pertencem a um Sol ("sol"). "estado" aplica um efeito que dura turnos
 ## (-1 = até o fim da batalha). "efeito" é um arquivo em assets/efeitos/ e
 ## "cor" tinge esse efeito.
+## Magia com "dano_magico" causa esse dano vezes a força da luz (com
+## "com_arma", soma o golpe da arma). Magia de sangue ("sangue": true) é do
+## Bruxo: funciona no escuro, não gasta Pedra Solar e pode custar HP
+## ("custo_hp") em vez de MP. "roubo_vida" cura quem usou em % do dano;
+## "sangrar" faz o alvo sangrar; "ganho_mp" devolve MP a quem usou.
 
 const NOME_SOL := {
 	"vida": "Sol da Vida", "morte": "Sol da Morte", "alma": "Sol da Alma",
@@ -54,6 +59,65 @@ const DADOS := {
 		"nome": "Golpe destruidor", "custo": 4, "alvo": "inimigo",
 		"descricao": "Golpe com toda a força: 10 de dano + arma, difícil de acertar.",
 		"base": 10, "com_arma": true, "requer": "arma", "precisao": 0.75, "efeito": "faisca",
+	},
+	"grito_guerra": {
+		"nome": "Grito de guerra", "custo": 3, "alvo": "proprio",
+		"descricao": "Um urro que firma a mão: +25% de dano nos golpes por 3 turnos.",
+		"estado": {"nome": "forca", "valor": 25, "turnos": 3}, "efeito": "impacto",
+		"cor": Color(1.0, 0.6, 0.35),
+	},
+	"postura_ferro": {
+		"nome": "Postura de ferro", "custo": 3, "alvo": "proprio",
+		"descricao": "Firma os pés e se fecha: +30% de defesa por 3 turnos.",
+		"estado": {"nome": "escudo", "valor": 30, "turnos": 3}, "efeito": "bloqueio",
+	},
+	# ------------------------------------------------------------ Mago
+	"lanca_solar": {
+		"nome": "Lança solar", "custo": 4, "alvo": "inimigo", "magia": true,
+		"descricao": "Um raio de sol concentrado: 14 de dano, mais forte quanto mais forte a luz.",
+		"dano_magico": 14, "precisao": 1.15, "efeito": "luz", "cor": Color(1.0, 0.85, 0.4),
+	},
+	"clarao": {
+		"nome": "Clarão", "custo": 5, "alvo": "inimigo_corpo", "magia": true,
+		"descricao": "Uma explosão de luz cega o inimigo: perde o próximo turno. Pode falhar.",
+		"chance": 0.75, "estado": {"nome": "ofuscado", "valor": 0, "turnos": 1}, "efeito": "luz",
+		"cor": Color(1.0, 1.0, 0.85),
+	},
+	"escudo_luz": {
+		"nome": "Escudo de luz", "custo": 4, "alvo": "aliado", "magia": true,
+		"descricao": "Uma camada de luz sólida: +35% de defesa por 3 turnos.",
+		"estado": {"nome": "escudo", "valor": 35, "turnos": 3}, "efeito": "bloqueio",
+		"cor": Color(1.0, 0.9, 0.5),
+	},
+	# ------------------------------------------------------------ Mago Guerreiro
+	"lamina_solar": {
+		"nome": "Lâmina solar", "custo": 4, "alvo": "inimigo", "magia": true,
+		"descricao": "A espada se acende com o sol: golpe da arma + 8 de dano mágico.",
+		"dano_magico": 8, "com_arma": true, "requer": "arma", "efeito": "corte",
+		"cor": Color(1.0, 0.8, 0.35),
+	},
+	"arma_encantada": {
+		"nome": "Arma encantada", "custo": 5, "alvo": "proprio", "magia": true,
+		"descricao": "Grava um sigilo de luz na arma: +30% de dano nos golpes até o fim da batalha.",
+		"estado": {"nome": "forca", "valor": 30, "turnos": -1}, "efeito": "luz",
+		"cor": Color(1.0, 0.8, 0.35),
+	},
+	# ------------------------------------------------------------ Bruxo
+	"sangria": {
+		"nome": "Sangria", "custo": 0, "custo_hp": 6, "alvo": "inimigo", "magia": true, "sangue": true,
+		"descricao": "Corta a própria palma e abre a carne do inimigo: 12 de dano e o alvo sangra.",
+		"dano_magico": 12, "sangrar": true, "efeito": "corte", "cor": Color(0.85, 0.1, 0.1),
+	},
+	"drenar_vida": {
+		"nome": "Drenar vida", "custo": 4, "alvo": "inimigo", "magia": true, "sangue": true,
+		"descricao": "Puxa o sangue do inimigo para si: 9 de dano e cura metade disso.",
+		"dano_magico": 9, "roubo_vida": 50, "ignora_esquiva": true, "efeito": "luz",
+		"cor": Color(0.7, 0.05, 0.15),
+	},
+	"pacto_sangue": {
+		"nome": "Pacto de sangue", "custo": 0, "custo_hp": 10, "alvo": "proprio", "magia": true, "sangue": true,
+		"descricao": "Paga com a própria vida para recuperar 8 MP.",
+		"ganho_mp": 8, "efeito": "luz", "cor": Color(0.6, 0.0, 0.1),
 	},
 	# ------------------------------------------------------------ Sol da Vida
 	"bencao_vaelora": {
@@ -139,4 +203,14 @@ static func impedimento(hid: String, c: Combatente) -> String:
 				return "Precisa de uma arma em mãos."
 	if c.mp < h["custo"]:
 		return "MP insuficiente."
+	if c.hp <= h.get("custo_hp", 0):
+		return "HP insuficiente."
 	return ""
+
+
+## Custo para mostrar no menu: "4 MP" ou "6 HP".
+static func texto_custo(hid: String) -> String:
+	var h: Dictionary = DADOS[hid]
+	if h.get("custo_hp", 0) > 0:
+		return "%d HP" % h["custo_hp"]
+	return "%d MP" % h["custo"]

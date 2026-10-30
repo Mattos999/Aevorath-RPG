@@ -98,7 +98,7 @@ static func _estilo(cor: Color, borda: Color) -> StyleBoxFlat:
 	return estilo
 
 
-func _botao(texto: String) -> Button:
+static func _botao(texto: String) -> Button:
 	var botao := Button.new()
 	botao.text = texto
 	botao.add_theme_font_size_override("font_size", 13)
@@ -340,10 +340,16 @@ func _atualizar_magias() -> void:
 		for hid in tecnicas:
 			t += _linha_habilidade(hid, c)
 		t += "\n"
+	var de_classe := magias.filter(func(hid): return Habilidades.DADOS[hid].get("sol", "") == "")
+	if not de_classe.is_empty():
+		var sangue: bool = Habilidades.DADOS[de_classe[0]].get("sangue", false)
+		t += "[color=#d9b34d][b]Magias de %s[/b][/color]  [color=#8c8080](%s)[/color]\n" % [m.get("classe", "classe"),
+			"magia de sangue: funciona no escuro" if sangue else "só sob o sol, a lua ou com Pedra Solar"]
+		for hid in de_classe:
+			t += _linha_habilidade(hid, c)
+		t += "\n"
 	var sol: String = m.get("sol", "")
-	if sol == "":
-		t += "[color=#8c8080]%s não segue nenhum Sol: não usa magia.[/color]\n" % m["nome"]
-	else:
+	if sol != "":
 		t += "[color=#d9b34d][b]%s[/b][/color]  [color=#8c8080](magia só sob o sol, a lua ou com Pedra Solar)[/color]\n" % Habilidades.NOME_SOL[sol]
 		for hid in Habilidades.MAGIAS_POR_SOL[sol]:
 			if hid in magias:
@@ -353,14 +359,16 @@ func _atualizar_magias() -> void:
 				t += "[color=#8c8080]• %s (em breve): %s[/color]\n" % [p[0], p[1]]
 		var passiva: Array = Habilidades.PASSIVAS[sol]
 		t += "[color=#8c8080]• Passiva, %s (em breve): %s[/color]\n" % [passiva[0], passiva[1]]
+	elif de_classe.is_empty():
+		t += "[color=#8c8080]%s não usa magia.[/color]\n" % m["nome"]
 	texto_magias.text = t
 
 
 func _linha_habilidade(hid: String, c: Combatente) -> String:
 	var h: Dictionary = Habilidades.DADOS[hid]
-	var linha := "• [b]%s[/b] (%d MP): %s" % [h["nome"], h["custo"], h["descricao"]]
+	var linha := "• [b]%s[/b] (%s): %s" % [h["nome"], Habilidades.texto_custo(hid), h["descricao"]]
 	var motivo := Habilidades.impedimento(hid, c)
-	if motivo != "" and motivo != "MP insuficiente.":
+	if motivo != "" and not motivo in ["MP insuficiente.", "HP insuficiente."]:
 		linha += " [color=#c05050](%s)[/color]" % motivo
 	return linha + "\n"
 

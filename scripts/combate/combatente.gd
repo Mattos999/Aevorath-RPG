@@ -50,6 +50,7 @@ const DEFESA_MAXIMA := 80
 const NOME_ESTADO := {
 	"veneno": "Envenenado", "paralisia": "Paralisado", "medo": "Aterrorizado",
 	"encantado": "Encantado", "regeneracao": "Regenerando", "forca": "Ataque +",
+	"escudo": "Defesa +", "ofuscado": "Ofuscado",
 }
 
 var id: String
@@ -212,6 +213,8 @@ func receber_golpe(parte: String, dano_bruto: int, rng: RandomNumberGenerator, p
 		return resultado
 	resultado["acertou"] = true
 	var reducao := defesa + (DEFESA_BLOQUEIO if defendendo else 0)
+	if estados.has("escudo"):
+		reducao += estados["escudo"]["valor"]
 	var dano := maxi(1, roundi(dano_bruto * (1.0 - mini(reducao, DEFESA_MAXIMA) / 100.0)))
 	if defendendo:
 		dano = maxi(1, dano / 2)

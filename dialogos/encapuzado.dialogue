@@ -2,15 +2,15 @@
 if Jogo.eventos.has("encapuzado")
 	???: Vá. Eu ainda tenho coisas a resolver aqui.
 	=> END
-???: Acorda garoto!!
-Aren: Qu..Quem é você?
-Aren: COF...COF...
+???: Acorda {{Jogo.genero("garoto", "garota")}}!!
+{{Jogo.nome_heroi()}}: Qu..Quem é você?
+{{Jogo.nome_heroi()}}: COF...COF...
 ???: Alguém tentando salvar a sua pele, toma aqui, as chaves da cela.
 $> dar_item("chave")
 $> Jogo.ganhar_pedra_solar()
 $> marcar("encapuzado")
 Você recebeu a Chave das celas e uma Pedra Solar (9 cargas).
-Aren: Por que você está me ajudando?
+{{Jogo.nome_heroi()}}: Por que você está me ajudando?
 ???: Não temos tempo para explicações, você tem que ir.
 ???: Anda, sai logo daqui!!
 => END

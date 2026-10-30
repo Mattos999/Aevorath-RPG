@@ -13,7 +13,7 @@ extends Node2D
 ##   S  placa   K  esqueleto   (mostram os Textos abaixo, na ordem de leitura)
 ##   X  escada (fim da demo)
 ## Entidades:
-##   P  início do jogador   H  o encapuzado   I  Iselde presa
+##   P  início do jogador   H  o encapuzado
 ##   C  Cruzado   O  Fiel Oco   F  Fiel Oca   N  Soldado de Sarnheim   V  Paladino
 ##   G  Pedra Solar no chão
 ## Pinte a partir da célula (0, 0) para a direita e para baixo.
