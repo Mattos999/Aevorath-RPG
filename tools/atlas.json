@@ -1,0 +1,258 @@
+{
+ "terreno": [
+  {
+   "nome": "chao",
+   "letra": ".",
+   "x": 0,
+   "y": 0
+  },
+  {
+   "nome": "chao2",
+   "letra": ".",
+   "x": 1,
+   "y": 0
+  },
+  {
+   "nome": "chao_rachado",
+   "letra": "~",
+   "x": 2,
+   "y": 0
+  },
+  {
+   "nome": "chao_rachado2",
+   "letra": "~",
+   "x": 3,
+   "y": 0
+  },
+  {
+   "nome": "chao_rachado3",
+   "letra": "~",
+   "x": 4,
+   "y": 0
+  },
+  {
+   "nome": "sangue",
+   "letra": ",",
+   "x": 5,
+   "y": 0
+  },
+  {
+   "nome": "chao_sol",
+   "letra": "*",
+   "x": 6,
+   "y": 0
+  },
+  {
+   "nome": "chao_buraco",
+   "letra": "o",
+   "x": 7,
+   "y": 0
+  },
+  {
+   "nome": "parede",
+   "letra": "#",
+   "x": 0,
+   "y": 1
+  },
+  {
+   "nome": "parede2",
+   "letra": "#",
+   "x": 1,
+   "y": 1
+  },
+  {
+   "nome": "parede_topo",
+   "letra": "#",
+   "x": 2,
+   "y": 1
+  },
+  {
+   "nome": "parede_tocha",
+   "letra": "T",
+   "x": 3,
+   "y": 1
+  },
+  {
+   "nome": "correntes",
+   "letra": "#",
+   "x": 4,
+   "y": 1
+  },
+  {
+   "nome": "grade",
+   "letra": "|",
+   "x": 5,
+   "y": 1
+  },
+  {
+   "nome": "cela_fechada",
+   "letra": "D",
+   "x": 6,
+   "y": 1
+  },
+  {
+   "nome": "cela_aberta",
+   "letra": "d",
+   "x": 7,
+   "y": 1
+  },
+  {
+   "nome": "porta",
+   "letra": "W",
+   "x": 0,
+   "y": 2
+  },
+  {
+   "nome": "escada",
+   "letra": "X",
+   "x": 1,
+   "y": 2
+  },
+  {
+   "nome": "cama",
+   "letra": "B",
+   "x": 2,
+   "y": 2
+  },
+  {
+   "nome": "balde",
+   "letra": "U",
+   "x": 3,
+   "y": 2
+  },
+  {
+   "nome": "barril",
+   "letra": "R",
+   "x": 4,
+   "y": 2
+  },
+  {
+   "nome": "caixa",
+   "letra": "Q",
+   "x": 5,
+   "y": 2
+  },
+  {
+   "nome": "altar",
+   "letra": "A",
+   "x": 6,
+   "y": 2
+  },
+  {
+   "nome": "placa",
+   "letra": "S",
+   "x": 7,
+   "y": 2
+  },
+  {
+   "nome": "esqueleto",
+   "letra": "K",
+   "x": 0,
+   "y": 3
+  },
+  {
+   "nome": "piso_madeira",
+   "letra": ".",
+   "x": 1,
+   "y": 3
+  },
+  {
+   "nome": "chao_musgo",
+   "letra": ".",
+   "x": 2,
+   "y": 3
+  },
+  {
+   "nome": "chao_poca",
+   "letra": ".",
+   "x": 3,
+   "y": 3
+  },
+  {
+   "nome": "chao_correntes",
+   "letra": ".",
+   "x": 4,
+   "y": 3
+  },
+  {
+   "nome": "parede_musgo",
+   "letra": "#",
+   "x": 5,
+   "y": 3
+  },
+  {
+   "nome": "parede_musgo2",
+   "letra": "#",
+   "x": 6,
+   "y": 3
+  },
+  {
+   "nome": "parede_janela",
+   "letra": "#",
+   "x": 7,
+   "y": 3
+  },
+  {
+   "nome": "parede_sol",
+   "letra": "#",
+   "x": 0,
+   "y": 4
+  }
+ ],
+ "entidades": [
+  {
+   "nome": "protagonista",
+   "letra": "P",
+   "x": 0,
+   "y": 0
+  },
+  {
+   "nome": "encapuzado",
+   "letra": "H",
+   "x": 1,
+   "y": 0
+  },
+  {
+   "nome": "protagonista2",
+   "letra": "I",
+   "x": 2,
+   "y": 0
+  },
+  {
+   "nome": "cruzado",
+   "letra": "C",
+   "x": 3,
+   "y": 0
+  },
+  {
+   "nome": "oco",
+   "letra": "O",
+   "x": 4,
+   "y": 0
+  },
+  {
+   "nome": "sarnheim",
+   "letra": "N",
+   "x": 5,
+   "y": 0
+  },
+  {
+   "nome": "paladino",
+   "letra": "V",
+   "x": 6,
+   "y": 0
+  },
+  {
+   "nome": "pedra_solar_48",
+   "letra": "G",
+   "x": 7,
+   "y": 0
+  },
+  {
+   "nome": "oca",
+   "letra": "F",
+   "x": 0,
+   "y": 1
+  }
+ ]
+}
