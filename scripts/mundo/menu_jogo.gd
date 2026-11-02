@@ -1,6 +1,7 @@
 class_name MenuJogo
 extends Control
 ## Menu do mapa (Esc, Tab ou I): Inventário, Magias e habilidades, Personagem.
+## No topo: Voltar ao título e Sair do jogo.
 ## No inventário, arraste o item até um slot (ou clique no item e em Equipar).
 ## Arrastar um slot de volta para a lista de itens desequipa.
 
@@ -58,6 +59,12 @@ func _ready() -> void:
 	botoes_membro.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	botoes_membro.alignment = BoxContainer.ALIGNMENT_CENTER
 	topo.add_child(botoes_membro)
+	var titulo_btn := _botao("Voltar ao título")
+	titulo_btn.pressed.connect(Jogo.pedir_titulo)
+	topo.add_child(titulo_btn)
+	var sair := _botao("Sair do jogo")
+	sair.pressed.connect(get_tree().quit)
+	topo.add_child(sair)
 	var fechar := _botao("Fechar [Esc]")
 	fechar.pressed.connect(fechar_menu)
 	topo.add_child(fechar)

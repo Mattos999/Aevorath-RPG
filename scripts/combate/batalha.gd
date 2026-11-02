@@ -12,7 +12,11 @@ extends Control
 ## à do mapa. No escuro todo mundo erra mais (PRECISAO_ESCURO).
 ##
 ## Menu: Atacar (golpe básico da arma), Habilidade (Bloquear, Falar, Fugir e
-## técnicas aprendidas), Magia e Item.
+## técnicas aprendidas), Magia e Item. Menus com muitas opções mostram 5 por
+## página e um botão "Mais".
+##
+## Sanidade (party): ataques de horror tiram sanidade; em 0 o membro
+## enlouquece e pode perder o turno (Perseverança, do Sol da Esperança, segura).
 
 signal terminou(resultado: String)  # "vitoria", "derrota" ou "fuga"
 signal _escolha(valor)
@@ -27,6 +31,10 @@ const ESCALA_COSTAS := 0.95
 const PARTES_COSTAS := {"cabeca": Vector2(0.5, 0.1), "torso": Vector2(0.5, 0.3),
 	"braco_esq": Vector2(0.8, 0.3), "braco_dir": Vector2(0.2, 0.3), "pernas": Vector2(0.5, 0.62)}
 const PAUSA := 0.8
+## Opções por página no menu de combate (o resto vai para "Mais").
+const OPCOES_POR_PAGINA := 5
+## Chance de perder o turno com a sanidade em 0.
+const CHANCE_LOUCURA := 0.5
 const CHANCE_FUGA := 0.45
 ## Raio: folha horizontal com 8 quadros de 220x100.
 const QUADROS_RAIO := 8
@@ -73,6 +81,8 @@ var luz_turnos := 0
 var tinta_luz: ColorRect
 var brilho_luz: ColorRect
 var cartoes: Array[Dictionary] = []
+var _opcoes_menu: Array = []
+var _pagina_menu := 0
 ## Membro -> TextureRect da figura de costas (só quem tem arte de costas).
 var figuras: Dictionary = {}
 ## Membro -> número da última pose temporária (para não voltar cedo demais).
@@ -366,6 +376,8 @@ func _atualizar_tudo() -> void:
 		cartao["mp"].max_value = maxi(1, c.mp_max)
 		cartao["mp"].value = c.mp
 		cartao["texto_hp"].text = "HP %d/%d   MP %d/%d" % [c.hp, c.hp_max, c.mp, c.mp_max]
+		if c.sanidade_max > 0:
+			cartao["texto_hp"].text += "   Sanidade %d" % c.sanidade
 		var estados := [c.descricao_membros()]
 		if c.sangrando:
 			estados.append("Sangrando")
@@ -433,11 +445,31 @@ func _piscar(no: CanvasItem) -> void:
 ## Mostra opções [{texto, valor, dica?, desabilitado?, parte?}] e espera a escolha.
 ## Com `pode_voltar`, adiciona "Voltar", que devolve null.
 func _menu(opcoes: Array, pode_voltar := false) -> Variant:
-	for filho in menu.get_children():
-		filho.queue_free()
-	var botoes: Array[Button] = []
 	if pode_voltar:
 		opcoes = opcoes + [{"texto": "Voltar", "valor": null, "dica": ""}]
+	_opcoes_menu = opcoes
+	_pagina_menu = 0
+	_desenhar_menu()
+	var valor = await _escolha
+	for filho in menu.get_children():
+		filho.queue_free()
+	dica.text = ""
+	destaque = ""
+	overlay.queue_redraw()
+	return valor
+
+
+## Desenha a página atual do menu (5 opções e "Mais" quando não cabem todas).
+func _desenhar_menu() -> void:
+	for filho in menu.get_children():
+		filho.queue_free()
+	var opcoes := _opcoes_menu
+	var paginas := 1
+	if opcoes.size() > OPCOES_POR_PAGINA + 1:
+		paginas = ceili(float(opcoes.size()) / OPCOES_POR_PAGINA)
+		var inicio := _pagina_menu * OPCOES_POR_PAGINA
+		opcoes = opcoes.slice(inicio, inicio + OPCOES_POR_PAGINA)
+	var botoes: Array[Button] = []
 	for opcao in opcoes:
 		var botao := Button.new()
 		botao.text = opcao["texto"]
@@ -454,17 +486,22 @@ func _menu(opcoes: Array, pode_voltar := false) -> Variant:
 			botao.mouse_entered.connect(botao.grab_focus)
 		menu.add_child(botao)
 		botoes.append(botao)
+	if paginas > 1:
+		var mais := Button.new()
+		mais.text = "Mais  (%d/%d) ›" % [_pagina_menu + 1, paginas]
+		mais.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		mais.add_theme_font_size_override("font_size", 12)
+		_estilizar_botao(mais)
+		mais.pressed.connect(func():
+			_pagina_menu = (_pagina_menu + 1) % paginas
+			_desenhar_menu())
+		mais.focus_entered.connect(func(): dica.text = "Mais opções.")
+		menu.add_child(mais)
+		botoes.append(mais)
 	for botao in botoes:
 		if not botao.disabled:
 			botao.grab_focus.call_deferred()
 			break
-	var valor = await _escolha
-	for filho in menu.get_children():
-		filho.queue_free()
-	dica.text = ""
-	destaque = ""
-	overlay.queue_redraw()
-	return valor
 
 
 func _input(evento: InputEvent) -> void:
@@ -518,7 +555,8 @@ func _escolher_acao(c: Combatente) -> Dictionary:
 			{"texto": "Habilidade", "valor": "habilidade", "dica": "Bloquear, falar, fugir e técnicas."},
 			{"texto": "Magia", "valor": "magia", "dica": "Magias do seu Sol. Precisam de luz.",
 				"desabilitado": _magias(c).is_empty()},
-			{"texto": "Item", "valor": "item", "dica": "Bandagens: %d" % Jogo.itens.get("bandagem", 0)},
+			{"texto": "Item", "valor": "item", "dica": _dica_itens(),
+				"desabilitado": Itens.consumiveis().is_empty()},
 		])
 		match principal:
 			"atacar":
@@ -534,12 +572,33 @@ func _escolher_acao(c: Combatente) -> Dictionary:
 				if not acao.is_empty():
 					return acao
 			"item":
-				if Jogo.itens.get("bandagem", 0) <= 0:
-					continue
-				var alvo = await _menu_aliado()
-				if alvo != null:
-					return {"tipo": "item", "item": "bandagem", "alvo": alvo}
+				var acao := await _escolher_item()
+				if not acao.is_empty():
+					return acao
 	return {}
+
+
+func _dica_itens() -> String:
+	var partes := []
+	for id in Itens.consumiveis():
+		partes.append("%s x%d" % [Itens.DADOS[id]["nome"], Jogo.itens[id]])
+	return ", ".join(partes) if not partes.is_empty() else "Sem itens."
+
+
+func _escolher_item() -> Dictionary:
+	var opcoes := []
+	for id in Itens.consumiveis():
+		var d: Dictionary = Itens.DADOS[id]
+		opcoes.append({"texto": "%s x%d" % [d["nome"], Jogo.itens[id]], "valor": id, "dica": d["descricao"]})
+	var id = await _menu(opcoes, true)
+	if id == null:
+		return {}
+	if Itens.DADOS[id]["uso"] == "pedra":
+		return {"tipo": "item", "item": id, "alvo": null}
+	var alvo = await _menu_aliado()
+	if alvo == null:
+		return {}
+	return {"tipo": "item", "item": id, "alvo": alvo}
 
 
 func _dica_ataque(c: Combatente) -> String:
@@ -561,6 +620,10 @@ func _pode_magia(c: Combatente) -> bool:
 	return Jogo.forca_magia(luz) > 0.0 or (c.tem_efeito("magia_no_escuro") and not c.colar_usado)
 
 
+func inimigo_chefe() -> bool:
+	return Inimigos.DADOS[inimigo_id].get("chefe", false)
+
+
 func _tecnicas(c: Combatente) -> Array:
 	return c.habilidades.filter(func(hid): return not Habilidades.DADOS[hid].get("magia", false))
 
@@ -576,7 +639,8 @@ func _escolher_habilidade(c: Combatente) -> Dictionary:
 		{"texto": bloqueio, "valor": "defender",
 			"dica": "+%d de defesa, metade do dano." % c.defesa_bloqueio()},
 		{"texto": "Falar", "valor": "falar", "dica": "Tentar conversar com %s." % inimigo.nome},
-		{"texto": "Fugir", "valor": "fugir", "dica": "Impossível sem pernas."},
+		{"texto": "Fugir", "valor": "fugir", "desabilitado": inimigo_chefe(),
+			"dica": "Não há como fugir dele." if inimigo_chefe() else "Impossível sem pernas."},
 	]
 	for hid in _tecnicas(c):
 		var h: Dictionary = Habilidades.DADOS[hid]
@@ -688,6 +752,16 @@ func _turno(c: Combatente) -> void:
 ## Efeitos no começo do turno. Retorna false se `c` perde o turno.
 func _aplicar_estados(c: Combatente) -> bool:
 	var age := true
+	# Sanidade em 0: a loucura pode roubar o turno.
+	if c.sanidade_max > 0 and c.sanidade == 0:
+		if c.sol == "esperanca":
+			c.ganhar_sanidade(5)
+			_registrar("%s quase se perde, mas segura a mente no lugar. (Perseverança, +5 de sanidade)" % c.nome)
+			await _pausa(0.5)
+		elif rng.randf() < CHANCE_LOUCURA:
+			_registrar("%s ri sozinho, perdido na loucura, e não age." % c.nome)
+			await _pausa(0.6)
+			return false
 	for nome in c.estados.keys():
 		var e: Dictionary = c.estados[nome]
 		match nome:
@@ -712,7 +786,19 @@ func _aplicar_estados(c: Combatente) -> bool:
 			"ofuscado":
 				_registrar("%s está cego pela luz e não age." % c.nome)
 				age = false
-			"forca", "escudo":
+			"cadaver":
+				if inimigo.vivo() and c.eh_jogador:
+					var intactas: Array = inimigo.partes_intactas()
+					var parte: String = intactas[rng.randi() % intactas.size()]
+					_registrar("O cadáver erguido por %s ataca %s." % [c.nome, _onde(inimigo, parte)])
+					await _pausa(0.4)
+					await _golpear(inimigo, parte, e["valor"] + rng.randi_range(0, 3), 1.0, false, "corte")
+					if e["turnos"] == 1:
+						_registrar("O cadáver desaba de novo.")
+			"atordoado":
+				_registrar("%s está caído e perde o turno." % c.nome)
+				age = false
+			"forca", "escudo", "projetado", "exposto", "ameacado", "enganado":
 				# Só contam os turnos (sem mensagem nem pausa).
 				if e["turnos"] > 0:
 					e["turnos"] -= 1
@@ -787,12 +873,7 @@ func _executar(c: Combatente, acao: Dictionary) -> void:
 		"habilidade":
 			await _usar_habilidade(c, acao)
 		"item":
-			var alvo: Combatente = acao["alvo"]
-			Jogo.itens["bandagem"] -= 1
-			_efeito("luz", _pos_alvo(alvo, "torso"), 0.7)
-			alvo.sangrando = false
-			var curado := alvo.curar(10)
-			_registrar("%s enfaixa %s: +%d HP, sangramento estancado." % [c.nome, alvo.nome, curado])
+			_usar_item(c, acao["item"], acao["alvo"])
 		"defender":
 			_efeito("bloqueio", _pos_alvo(c, "torso"))
 			c.defendendo = true
@@ -816,6 +897,36 @@ func _executar(c: Combatente, acao: Dictionary) -> void:
 				return
 			_registrar("Não há para onde correr!" if chance == 0.0 else "A fuga falhou!")
 	await _pausa()
+
+
+func _usar_item(c: Combatente, id: String, alvo: Combatente) -> void:
+	var d: Dictionary = Itens.DADOS[id]
+	if Jogo.itens.get(id, 0) <= 0:
+		return
+	Jogo.itens[id] -= 1
+	if alvo != null:
+		_efeito("luz", _pos_alvo(alvo, "torso"), 0.7)
+	match d["uso"]:
+		"cura":
+			var curado := alvo.curar(d.get("cura", 0))
+			var texto := "%s usa %s em %s: +%d HP" % [c.nome, d["nome"], alvo.nome, curado]
+			if d.get("estanca", false) and alvo.sangrando:
+				alvo.sangrando = false
+				texto += ", sangramento estancado"
+			_registrar(texto + ".")
+		"mp":
+			var antes := alvo.mp
+			alvo.mp = mini(alvo.mp_max, alvo.mp + d.get("mp", 0))
+			_registrar("%s usa %s em %s: +%d MP." % [c.nome, d["nome"], alvo.nome, alvo.mp - antes])
+		"sanidade":
+			var ganho := alvo.ganhar_sanidade(d.get("sanidade", 0))
+			alvo.estados.erase("medo")
+			_registrar("%s usa %s em %s: +%d de sanidade." % [c.nome, d["nome"], alvo.nome, ganho])
+		"antidoto":
+			alvo.estados.erase("veneno")
+			_registrar("%s usa %s em %s: o veneno some." % [c.nome, d["nome"], alvo.nome])
+		"pedra":
+			_registrar(Jogo.ganhar_cargas(d.get("cargas", 1)))
 
 
 func _usar_habilidade(c: Combatente, acao: Dictionary) -> void:
@@ -865,8 +976,19 @@ func _usar_habilidade(c: Combatente, acao: Dictionary) -> void:
 				if h.get("com_arma", false):
 					dano += _dano_base(c, 1.0, h.get("base", 0), true)
 			else:
-				dano = _dano_fisico(c, 1.0, h.get("base", 0), h.get("com_arma", false))
-			await _golpear(inimigo, acao["parte"], dano, h.get("precisao", 1.0), h.get("ignora_esquiva", false), efeito, cor)
+				dano = _dano_fisico(c, 1.0, h.get("base", 0) + (c.bloqueio_escudo if h.get("soma_escudo", false) else 0),
+					h.get("com_arma", false))
+			if h.get("perfura", false):
+				# Ignora a armadura: aumenta o dano para compensar a redução.
+				dano = roundi(dano / maxf(0.2, 1.0 - mini(inimigo.defesa, Combatente.DEFESA_MAXIMA) / 100.0))
+			var r := await _golpear(inimigo, acao["parte"], dano, h.get("precisao", 1.0), h.get("ignora_esquiva", false), efeito, cor)
+			if r["acertou"] and inimigo.vivo():
+				if h.get("sangria", false) and not inimigo.sangrando:
+					inimigo.sangrando = true
+					_registrar("%s começa a sangrar." % inimigo.nome)
+				if h.has("estado") and rng.randf() <= h.get("chance", 1.0):
+					inimigo.estados[h["estado"]["nome"]] = h["estado"].duplicate()
+					_registrar("%s: %s." % [inimigo.nome, Combatente.NOME_ESTADO[h["estado"]["nome"]]])
 			return
 		"inimigo_corpo":
 			alvos = [inimigo]
@@ -883,15 +1005,29 @@ func _usar_habilidade(c: Combatente, acao: Dictionary) -> void:
 		if h.has("cura_pct"):
 			var curado := alvo.curar(maxi(1, roundi(alvo.hp_max * h["cura_pct"] / 100.0 * forca * c.mult_cura())))
 			_registrar("%s recupera %d HP." % [alvo.nome, curado])
+		if h.has("cura"):
+			var curado := alvo.curar(roundi(h["cura"] * c.mult_cura()))
+			_registrar("%s recupera %d HP." % [alvo.nome, curado])
+		if h.get("estanca", false) and alvo.sangrando:
+			alvo.sangrando = false
+			_registrar("O sangramento de %s para." % alvo.nome)
+		if h.has("sanidade"):
+			var ganho := alvo.ganhar_sanidade(maxi(1, roundi(h["sanidade"] * forca * c.mult_cura())))
+			alvo.estados.erase("medo")
+			_registrar("%s recupera %d de sanidade." % [alvo.nome, ganho])
 		if h.has("estado"):
-			if rng.randf() > h.get("chance", 1.0):
+			var chance: float = h.get("chance", 1.0)
+			if h.get("chance_por_hp", false):
+				# Levantar cadáver: quanto mais forte o inimigo, mais difícil.
+				chance = clampf(1.15 - inimigo.hp_max / 200.0, 0.4, 0.95)
+			if rng.randf() > chance:
 				_registrar("%s resiste a %s." % [alvo.nome, h["nome"]])
 				continue
 			if alvo.imune_a(h["estado"]["nome"]):
 				_registrar("%s é imune a %s." % [alvo.nome, h["nome"]])
 				continue
 			var e: Dictionary = h["estado"].duplicate()
-			if e["nome"] in ["veneno", "paralisia"]:
+			if e["nome"] in ["veneno", "paralisia", "cadaver"]:
 				e["valor"] = maxi(1, roundi(e["valor"] * forca))
 			alvo.estados[e["nome"]] = e
 			_registrar("%s: %s." % [alvo.nome, Combatente.NOME_ESTADO[e["nome"]]])
@@ -915,6 +1051,18 @@ func _turno_inimigo(c: Combatente) -> void:
 		if not g.get("magia", false) or luz != "escuro" or c.cargas_solares > 0:
 			golpes.append(g)
 	var golpe: Dictionary = golpes[rng.randi() % golpes.size()]
+	if c.estados.has("enganado"):
+		# Enganar (Sol do Coração): acredita na mentira e golpeia a si mesmo.
+		c.estados.erase("enganado")
+		var proprio := _dano_base(c, 0.8)
+		_registrar("%s acredita na mentira e golpeia a si mesmo!" % c.nome)
+		await _pausa(0.5)
+		c.hp = maxi(0, c.hp - proprio)
+		_efeito("impacto", _pos_alvo(c, "torso"), 1.0)
+		_piscar(sprite_inimigo)
+		_registrar("%d de dano em %s." % [proprio, c.nome])
+		await _pausa()
+		return
 	if golpe.has("muda_luz"):
 		_registrar("%s usa %s." % [c.nome, golpe["nome"]])
 		await _pausa(0.5)
@@ -936,7 +1084,21 @@ func _turno_inimigo(c: Combatente) -> void:
 	if efeito == "raio":
 		await _raio(POS_INIMIGO + MAO_RAIO, _pos_alvo(alvo, parte))
 		efeito = "faisca"
-	await _golpear(alvo, parte, dano, golpe.get("precisao", 1.0), golpe.get("ignora_esquiva", false), efeito)
+	var precisao: float = golpe.get("precisao", 1.0)
+	if c.estados.has("ameacado"):
+		precisao *= 1.0 - c.estados["ameacado"]["valor"] / 100.0
+	var r := await _golpear(alvo, parte, dano, precisao, golpe.get("ignora_esquiva", false), efeito)
+	if r["acertou"] and alvo.vivo():
+		if golpe.has("sanidade"):
+			var perdeu := alvo.perder_sanidade(golpe["sanidade"])
+			if perdeu > 0:
+				await _pausa(0.4)
+				_registrar("%s perde %d de sanidade.%s" % [alvo.nome, perdeu,
+					" A mente se parte!" if alvo.sanidade == 0 else ""])
+		if golpe.has("estado") and rng.randf() <= golpe.get("chance", 1.0) and not alvo.imune_a(golpe["estado"]["nome"]):
+			alvo.estados[golpe["estado"]["nome"]] = golpe["estado"].duplicate()
+			await _pausa(0.4)
+			_registrar("%s: %s." % [alvo.nome, Combatente.NOME_ESTADO[golpe["estado"]["nome"]]])
 	if magia and luz == "escuro" and c.cargas_solares == 0:
 		await _pausa(0.4)
 		_registrar("A Pedra Solar de %s se desfaz em pó." % c.nome)
@@ -972,7 +1134,12 @@ func _golpear(alvo: Combatente, parte: String, dano: int, precisao := 1.0, ignor
 	var pos := _pos_alvo(alvo, parte)
 	if not r["acertou"]:
 		_efeito("impacto", pos + Vector2(rng.randf_range(-40, 40), -20), 0.5, 0.45)
-		_registrar("Errou!")
+		if r.get("atravessou", false):
+			_registrar("O golpe atravessa o corpo vazio de %s!" % alvo.nome)
+		elif r.get("previu", false):
+			_registrar("%s já tinha visto esse golpe e desvia!" % alvo.nome)
+		else:
+			_registrar("Errou!")
 		return r
 	_efeito(efeito, pos, 1.0, 1.0, cor)
 	if r["decepou"]:
@@ -1073,6 +1240,13 @@ func _verificar_fim() -> void:
 		return
 	if not inimigo.vivo():
 		_registrar("Vitória. Os Nove Sóis assistem em silêncio.")
+		if inimigo_chefe():
+			Jogo.eventos["chefe_derrotado"] = true
+		Jogo.ultimo_saque.clear()
+		for par in Inimigos.DADOS[inimigo_id].get("saque", []):
+			if rng.randf() < par[1]:
+				Jogo.itens[par[0]] = Jogo.itens.get(par[0], 0) + 1
+				Jogo.ultimo_saque.append(par[0])
 		await _pausa(1.2)
 		_encerrar("vitoria")
 		return

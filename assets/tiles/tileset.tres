@@ -73,6 +73,20 @@ texture_region_size = Vector2i(64, 64)
 7:3/0/custom_data_0 = "#"
 0:4/0 = 0
 0:4/0/custom_data_0 = "#"
+1:4/0 = 0
+1:4/0/custom_data_0 = "."
+2:4/0 = 0
+2:4/0/custom_data_0 = "."
+3:4/0 = 0
+3:4/0/custom_data_0 = "w"
+4:4/0 = 0
+4:4/0/custom_data_0 = "#"
+5:4/0 = 0
+5:4/0/custom_data_0 = "#"
+6:4/0 = 0
+6:4/0/custom_data_0 = "*"
+7:4/0 = 0
+7:4/0/custom_data_0 = "."
 
 [sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_qxau0"]
 resource_name = "Entidades"
@@ -96,6 +110,10 @@ texture_region_size = Vector2i(64, 64)
 7:0/0/custom_data_0 = "G"
 0:1/0 = 0
 0:1/0/custom_data_0 = "F"
+1:1/0 = 0
+1:1/0/custom_data_0 = "M"
+2:1/0 = 0
+2:1/0/custom_data_0 = "Y"
 
 [resource]
 tile_size = Vector2i(64, 64)

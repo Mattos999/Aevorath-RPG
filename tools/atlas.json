@@ -197,6 +197,48 @@
    "letra": "#",
    "x": 0,
    "y": 4
+  },
+  {
+   "nome": "esgoto_chao",
+   "letra": ".",
+   "x": 1,
+   "y": 4
+  },
+  {
+   "nome": "esgoto_chao2",
+   "letra": ".",
+   "x": 2,
+   "y": 4
+  },
+  {
+   "nome": "esgoto_agua",
+   "letra": "w",
+   "x": 3,
+   "y": 4
+  },
+  {
+   "nome": "esgoto_parede",
+   "letra": "#",
+   "x": 4,
+   "y": 4
+  },
+  {
+   "nome": "esgoto_cano",
+   "letra": "#",
+   "x": 5,
+   "y": 4
+  },
+  {
+   "nome": "esgoto_sol",
+   "letra": "*",
+   "x": 6,
+   "y": 4
+  },
+  {
+   "nome": "esgoto_ponte",
+   "letra": ".",
+   "x": 7,
+   "y": 4
   }
  ],
  "entidades": [
@@ -252,6 +294,18 @@
    "nome": "oca",
    "letra": "F",
    "x": 0,
+   "y": 1
+  },
+  {
+   "nome": "rato",
+   "letra": "M",
+   "x": 1,
+   "y": 1
+  },
+  {
+   "nome": "barata",
+   "letra": "Y",
+   "x": 2,
    "y": 1
   }
  ]

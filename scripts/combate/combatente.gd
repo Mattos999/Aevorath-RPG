@@ -60,8 +60,15 @@ const DEFESA_MAXIMA := 80
 const NOME_ESTADO := {
 	"veneno": "Envenenado", "paralisia": "Paralisado", "medo": "Aterrorizado",
 	"encantado": "Encantado", "regeneracao": "Regenerando", "forca": "Ataque +",
-	"escudo": "Defesa +", "ofuscado": "Ofuscado",
+	"escudo": "Defesa +", "ofuscado": "Ofuscado", "cadaver": "Cadáver erguido",
+	"projetado": "Fora do corpo", "exposto": "Exposto", "previsto": "Previsto",
+	"enganado": "Enganado", "ameacado": "Ameaçado", "atordoado": "Atordoado",
 }
+## Sanidade da party (0 = enlouquece: perde turnos, menos com Perseverança).
+const SANIDADE_MAXIMA := 100
+## Exposto (Ouija): mais fácil de acertar e recebe mais dano.
+const BONUS_EXPOSTO := 0.2
+const MULT_EXPOSTO := 1.25
 
 var id: String
 var nome: String
@@ -109,6 +116,9 @@ var sol := ""
 var nunca_desistir_usado := false
 ## A passiva do Sol da Vida acabou de salvar este lutador (a batalha avisa).
 var resistiu := false
+## Sanidade (só a party; 0 nos inimigos = não tem).
+var sanidade := 0
+var sanidade_max := 0
 
 
 static func criar(dados: Dictionary, jogador: bool) -> Combatente:
@@ -148,6 +158,9 @@ static func criar(dados: Dictionary, jogador: bool) -> Combatente:
 	c.atributos = dados.get("atributos", {})
 	c.estilo = dados.get("estilo", {}).duplicate()
 	c.nunca_desistir_usado = dados.get("nunca_desistir_usado", false)
+	if jogador:
+		c.sanidade_max = dados.get("sanidade", SANIDADE_MAXIMA)
+		c.sanidade = dados.get("sanidade_atual", c.sanidade_max)
 	var hp_partes: Dictionary = dados.get("hp_partes", {})
 	var decepados: Array = dados.get("decepados", [])
 	for p in PARTES:
@@ -217,7 +230,9 @@ func defesa_bloqueio() -> int:
 
 
 func chance_critico() -> float:
-	return Atributos.chance_critico(atributos) if eh_jogador else 0.0
+	if not eh_jogador:
+		return 0.0
+	return Atributos.chance_critico(atributos) + (0.05 if tem_efeito("critico") else 0.0)
 
 
 ## Força pessoal da magia (Conexão); 1.0 para inimigos.
@@ -278,12 +293,23 @@ func chance_de_ser_acertado(parte: String, precisao := 1.0) -> float:
 	var chance: float = CHANCE_PARTE[parte] * precisao - chance_esquiva()
 	if decepado("pernas"):
 		chance += 0.2
+	if estados.has("exposto"):
+		chance += BONUS_EXPOSTO
 	return clampf(chance, 0.05, 0.98)
 
 
 ## Aplica dano a uma parte. Retorna {acertou, dano, decepou, morreu}.
 func receber_golpe(parte: String, dano_bruto: int, rng: RandomNumberGenerator, precisao := 1.0, ignora_esquiva := false) -> Dictionary:
 	var resultado := {"acertou": false, "dano": 0, "decepou": false, "morreu": false}
+	# Projeção (Sol da Alma): o corpo está vazio, o golpe atravessa.
+	if estados.has("projetado"):
+		resultado["atravessou"] = true
+		return resultado
+	# Visualizar (Sol do Tempo): já viu esse golpe; desvia uma vez.
+	if estados.has("previsto"):
+		estados.erase("previsto")
+		resultado["previu"] = true
+		return resultado
 	var chance := 0.98 if ignora_esquiva else chance_de_ser_acertado(parte, precisao)
 	if rng.randf() > chance:
 		return resultado
@@ -294,6 +320,8 @@ func receber_golpe(parte: String, dano_bruto: int, rng: RandomNumberGenerator, p
 	var dano := maxi(1, roundi(dano_bruto * (1.0 - mini(reducao, DEFESA_MAXIMA) / 100.0)))
 	if defendendo:
 		dano = maxi(1, dano / 2)
+	if estados.has("exposto"):
+		dano = roundi(dano * MULT_EXPOSTO)
 	resultado["dano"] = dano
 
 	var info: Dictionary = partes[parte]
@@ -338,6 +366,23 @@ func imune_a(estado: String) -> bool:
 	return (sol == "morte" and estado == "veneno") or (sol == "medo" and estado == "medo")
 
 
+## Tira sanidade (só da party). Retorna quanto tirou.
+func perder_sanidade(valor: int) -> int:
+	if sanidade_max <= 0:
+		return 0
+	var antes := sanidade
+	sanidade = maxi(0, sanidade - valor)
+	return antes - sanidade
+
+
+func ganhar_sanidade(valor: int) -> int:
+	if sanidade_max <= 0:
+		return 0
+	var antes := sanidade
+	sanidade = mini(sanidade_max, sanidade + valor)
+	return sanidade - antes
+
+
 func curar(valor: int) -> int:
 	var antes := hp
 	hp = mini(hp_max, hp + valor)
@@ -354,7 +399,7 @@ func descricao_estados() -> String:
 
 ## Estado da batalha deste lutador, para Retroceder.
 func foto() -> Dictionary:
-	return {"hp": hp, "mp": mp, "partes": partes.duplicate(true), "sangrando": sangrando,
+	return {"hp": hp, "mp": mp, "sanidade": sanidade, "partes": partes.duplicate(true), "sangrando": sangrando,
 		"estados": estados.duplicate(true), "defendendo": defendendo, "cargas": cargas_solares,
 		"colar": colar_usado}
 
@@ -362,6 +407,7 @@ func foto() -> Dictionary:
 func restaurar(f: Dictionary) -> void:
 	hp = f["hp"]
 	mp = f["mp"]
+	sanidade = f.get("sanidade", sanidade)
 	partes = f["partes"].duplicate(true)
 	sangrando = f["sangrando"]
 	estados = f["estados"].duplicate(true)
@@ -385,6 +431,8 @@ func para_dados(base: Dictionary) -> Dictionary:
 	var dados := base.duplicate(true)
 	dados["hp_atual"] = hp
 	dados["mp_atual"] = mp
+	if sanidade_max > 0:
+		dados["sanidade_atual"] = sanidade
 	dados["decepados"] = membros_decepados()
 	dados["sangrando"] = sangrando
 	dados["nunca_desistir_usado"] = nunca_desistir_usado

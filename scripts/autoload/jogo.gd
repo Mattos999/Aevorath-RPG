@@ -7,6 +7,10 @@ extends Node
 ## quebra ao esgotar. A força da magia segue o sol e é máxima ao meio-dia.
 
 signal batalha_pedida(inimigo_id: String, id_no_mapa: String)
+## A escada levou para outro mapa (o Main troca a cena do Mundo).
+signal mapa_pedido(cena: String)
+## Menu > Voltar ao título.
+signal titulo_pedido
 
 ## O jogador cria o protagonista no começo (tela de criação): nome, sexo e
 ## o Sol que segue. Não há classes (Carlos, 2026-11-02): o sexo escolhe a
@@ -33,9 +37,24 @@ const SEXOS := {
 ## agilidade saem dos atributos (Atributos.status).
 const HEROI_BASE := {
 	"defesa": 0,
-	"habilidades": ["corte_preciso", "golpe_destruidor"],
+	"habilidades": ["corte_preciso", "golpe_destruidor", "estocada", "rasteira", "investida_escudo", "primeiros_socorros"],
 	"equipamento": {"arma": "espada_enferrujada", "corpo": "panos_velhos", "pes": "calcados_velhos"},
 }
+
+## O encapuzado de olhos vermelhos: entra na party nos esgotos, antes do chefe.
+const ENCAPUZADO := {
+	"id": "encapuzado", "nome": "Encapuzado", "titulo": "???", "sol": "",
+	"hp": 85, "mp": 24, "ataque": 11, "defesa": 15, "agilidade": 12,
+	"textura": "res://assets/batalha/retrato_encapuzado.png", "costas": "",
+	"folha_mapa": "res://assets/sprites/encapuzado.png",
+	"habilidades": ["lamina_sombria", "olhar_vermelho", "corte_preciso", "primeiros_socorros"],
+	"equipamento": {"arma": "espada_prata", "corpo": "armadura_couro"},
+	"hp_partes": {"cabeca": 26, "braco_esq": 28, "braco_dir": 28, "pernas": 31},
+	"estilo": {},
+}
+
+## Mapas da demo, na ordem: a escada da prisão desce para os esgotos.
+const MAPA_INICIAL := "res://scenes/mapas/prisao.tscn"
 
 ## Vida de cada membro em relação ao HP total.
 const PROPORCAO_PARTES := {"cabeca": 0.3, "braco_esq": 0.33, "braco_dir": 0.33, "pernas": 0.37}
@@ -57,6 +76,10 @@ var minutos := 0  # minutos desde o início do jogo
 ## Luz no lugar onde a próxima batalha começa: "sol", "lua" ou "escuro".
 var luz_batalha := "escuro"
 var fundo_batalha := "res://assets/batalha/fundo_prisao.png"
+## Cena do mapa onde a party está.
+var mapa_atual := MAPA_INICIAL
+## Itens ganhos na última vitória (o mapa avisa ao voltar).
+var ultimo_saque: Array = []
 var rng := RandomNumberGenerator.new()
 
 
@@ -90,7 +113,7 @@ static func criar_heroi(nome: String, sexo: String, sol := "", atributos := {}) 
 		"hp": st["hp"], "mp": st["mp"], "ataque": st["ataque"], "defesa": c["defesa"], "agilidade": st["agilidade"],
 		"textura": s["textura"], "costas": s["costas"], "folha_mapa": s["folha_mapa"],
 		"habilidades": habilidades, "equipamento": c["equipamento"].duplicate(),
-		"hp_partes": hp_partes, "estilo": {},
+		"hp_partes": hp_partes, "estilo": {}, "sanidade": Combatente.SANIDADE_MAXIMA,
 	}
 
 
@@ -100,9 +123,10 @@ func novo_jogo(nome := "", sexo := "", sol := "", atributos := {}) -> void:
 		criacao = {"nome": nome, "sexo": sexo, "sol": sol, "atributos": atributos.duplicate()}
 	party = [criar_heroi(criacao["nome"], criacao["sexo"], criacao["sol"], criacao.get("atributos", {}))]
 	itens = {"bandagem": 2}
-	# Provisório, para testar o inventário até os itens estarem no mapa.
-	inventario.assign(["espada_prata", "machado_guerra", "espada_duas_maos", "escudo_madeira",
-		"armadura_couro", "bota_couro", "colar_sol", "brinco_lebre"])
+	# Demo: o resto dos itens está espalhado pelos esgotos.
+	inventario.assign(["escudo_madeira"])
+	mapa_atual = MAPA_INICIAL
+	ultimo_saque.clear()
 	pedras_solares.clear()
 	inimigos_derrotados.clear()
 	eventos.clear()
@@ -160,10 +184,19 @@ func descansar() -> void:
 		membro["mp_atual"] = membro["mp"]
 		membro["sangrando"] = false
 		membro["nunca_desistir_usado"] = false
+		membro["sanidade_atual"] = membro.get("sanidade", Combatente.SANIDADE_MAXIMA)
 
 
 func pedir_batalha(inimigo_id: String, id_no_mapa: String) -> void:
 	batalha_pedida.emit(inimigo_id, id_no_mapa)
+
+
+func pedir_mapa(cena: String) -> void:
+	mapa_pedido.emit(cena)
+
+
+func pedir_titulo() -> void:
+	titulo_pedido.emit()
 
 
 # ---------------------------------------------------------------- Equipamento
@@ -212,11 +245,50 @@ func slot_livre(membro: Dictionary, item_id: String) -> String:
 func usar_item(membro: Dictionary, item_id: String) -> String:
 	if itens.get(item_id, 0) <= 0 or membro.get("hp_atual", membro["hp"]) <= 0:
 		return ""
+	var d: Dictionary = Itens.DADOS[item_id]
+	var texto := ""
+	match d["uso"]:
+		"cura":
+			var antes: int = membro.get("hp_atual", membro["hp"])
+			membro["hp_atual"] = mini(membro["hp"], antes + d.get("cura", 0))
+			texto = "%s recupera %d HP." % [membro["nome"], membro["hp_atual"] - antes]
+			if d.get("estanca", false):
+				membro["sangrando"] = false
+		"mp":
+			var antes: int = membro.get("mp_atual", membro["mp"])
+			membro["mp_atual"] = mini(membro["mp"], antes + d.get("mp", 0))
+			texto = "%s recupera %d MP." % [membro["nome"], membro["mp_atual"] - antes]
+		"sanidade":
+			var maximo: int = membro.get("sanidade", Combatente.SANIDADE_MAXIMA)
+			var antes: int = membro.get("sanidade_atual", maximo)
+			membro["sanidade_atual"] = mini(maximo, antes + d.get("sanidade", 0))
+			texto = "%s recupera %d de sanidade." % [membro["nome"], membro["sanidade_atual"] - antes]
+		"antidoto":
+			texto = "%s bebe o antídoto. (Use na batalha contra veneno.)" % membro["nome"]
+		"pedra":
+			texto = ganhar_cargas(d.get("cargas", 1))
 	itens[item_id] -= 1
-	var antes: int = membro.get("hp_atual", membro["hp"])
-	membro["hp_atual"] = mini(membro["hp"], antes + Itens.DADOS[item_id].get("cura", 0))
-	membro["sangrando"] = false
-	return "%s recupera %d HP." % [membro["nome"], membro["hp_atual"] - antes]
+	return texto
+
+
+## Fragmento solar: soma cargas à primeira pedra (ou vira uma pedra nova).
+func ganhar_cargas(cargas: int) -> String:
+	if pedras_solares.is_empty():
+		pedras_solares.append(cargas)
+		return "O fragmento vira uma Pedra Solar com %d cargas." % cargas
+	pedras_solares[0] = mini(CARGAS_PEDRA, pedras_solares[0] + cargas)
+	return "A Pedra Solar brilha mais forte: %d cargas." % pedras_solares[0]
+
+
+## Põe o encapuzado na party (uma vez).
+func recrutar_encapuzado() -> void:
+	for membro in party:
+		if membro["id"] == "encapuzado":
+			return
+	var e: Dictionary = ENCAPUZADO.duplicate(true)
+	e["sanidade"] = Combatente.SANIDADE_MAXIMA
+	party.append(e)
+	eventos["encapuzado_na_party"] = true
 
 
 # ---------------------------------------------------------------- Relógio e luz

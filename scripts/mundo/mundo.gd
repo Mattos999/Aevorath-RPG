@@ -14,9 +14,11 @@ const COMPORTAMENTO_PADRAO := {"comportamento": "perseguir", "alcance": ALCANCE_
 ## Conversas dos NPCs pintados com letra.
 const DIALOGO_ENCAPUZADO := "res://dialogos/encapuzado.dialogue"
 
-const INIMIGO_POR_LETRA := {"C": "cruzado", "O": "oco", "F": "oca", "N": "sarnheim", "V": "paladino"}
+const INIMIGO_POR_LETRA := {"C": "cruzado", "O": "oco", "F": "oca", "N": "sarnheim", "V": "paladino",
+	"M": "rato", "Y": "barata"}
 
-const PASSAVEIS := ".,~*dWXG"
+## J = item no chão (Entidade do tipo Item).
+const PASSAVEIS := ".,~*dWXGJ"
 ## Inimigos não passam por portas nem pela escada.
 const PASSAVEIS_INIMIGO := ".,~*"
 
@@ -38,6 +40,7 @@ var textos: Dictionary = {}  # Vector2i -> texto (placas e esqueletos)
 var inimigos: Dictionary = {}  # id -> {no, pos, tipo, passo}
 var npcs: Dictionary = {}  # Vector2i -> {no, id}
 var pedras_no_chao: Dictionary = {}  # Vector2i -> Sprite2D
+var itens_no_chao: Dictionary = {}  # Vector2i -> {no, item, quantidade, id}
 
 var jogador: Sprite2D
 var passo_jogador := 0
@@ -73,7 +76,10 @@ func _ready() -> void:
 
 
 func _carregar_mapa() -> void:
-	mapa = cena_mapa.instantiate()
+	var cena: PackedScene = cena_mapa
+	if Jogo.mapa_atual != "" and Jogo.mapa_atual != cena_mapa.resource_path:
+		cena = load(Jogo.mapa_atual)
+	mapa = cena.instantiate()
 	add_child(mapa)
 	mapa.entidades.visible = false
 	var indice_texto := 0
@@ -108,7 +114,7 @@ func _carregar_mapa() -> void:
 					if Jogo.eventos.has("porta_%d_%d" % [x, y]):
 						c = "d"
 						mapa.trocar_terreno(pos, "d")
-				"C", "O", "F", "N", "V":
+				"C", "O", "F", "N", "V", "M", "Y":
 					var id := "%s_%d_%d" % [c, x, y]
 					if not Jogo.inimigos_derrotados.has(id):
 						_criar_inimigo(id, INIMIGO_POR_LETRA[c], pos)
@@ -163,6 +169,16 @@ func _carregar_entidades() -> void:
 			Entidade.Tipo.NPC:
 				if e.some_com_evento == "" or not Jogo.eventos.has(e.some_com_evento):
 					_criar_npc(e.id_unico(), e.folha, pos, e.dialogo, e.cue)
+			Entidade.Tipo.ITEM:
+				var id_item := "item_%s_%s" % [mapa.name, e.name]
+				if not Jogo.eventos.has(id_item) and Itens.DADOS.has(e.item):
+					_trocar_tile(pos, "J")
+					var saco := Sprite2D.new()
+					saco.texture = load(Entidade.FOLHA_ITEM)
+					saco.position = Vector2(pos * TILE) + Vector2(TILE, TILE) / 2
+					saco.z_index = 1
+					add_child(saco)
+					itens_no_chao[pos] = {"no": saco, "item": e.item, "quantidade": e.quantidade, "id": id_item}
 			Entidade.Tipo.PEDRA_SOLAR:
 				if not Jogo.eventos.has("pedra_%d_%d" % [pos.x, pos.y]):
 					_trocar_tile(pos, "G")
@@ -277,14 +293,15 @@ func _atualizar_hud() -> void:
 	for membro in Jogo.party:
 		var hp: int = membro.get("hp_atual", membro["hp"])
 		var mp: int = membro.get("mp_atual", membro["mp"])
+		var san: int = membro.get("sanidade_atual", membro.get("sanidade", 100))
 		var estado := ""
 		if hp <= 0:
 			estado = "  (morto)"
 		elif membro.get("sangrando", false):
 			estado = "  (sangrando)"
-		linhas.append("%s  HP %d/%d  MP %d/%d%s" % [membro["nome"], hp, membro["hp"], mp, membro["mp"], estado])
-	linhas.append("[Esc] Menu   [F3] 2D/3D")
-	var itens := "Bandagens: %d" % Jogo.itens.get("bandagem", 0)
+		linhas.append("%s  HP %d/%d  MP %d/%d  Sanidade %d%s" % [membro["nome"], hp, membro["hp"], mp, membro["mp"], san, estado])
+	linhas.append("[Esc] Menu / Sair   [F3] 2D/3D")
+	var itens := "Itens: %d" % Itens.consumiveis().reduce(func(soma, id): return soma + Jogo.itens[id], 0)
 	if Jogo.tem_pedra_solar():
 		itens += "   Pedra Solar: %d/%d" % [Jogo.pedras_solares[0], Jogo.CARGAS_PEDRA]
 		if Jogo.pedras_solares.size() > 1:
@@ -441,8 +458,15 @@ func _tentar_mover(dir: Vector2i) -> void:
 	match _tile(pos_jogador):
 		"G":
 			_pegar_pedra(pos_jogador)
+		"J":
+			_pegar_item(pos_jogador)
 		"X":
-			_mostrar_dialogo("A escada sobe para a luz dos Nove Sóis... e para os Cruzados lá fora.\nFim da demonstração. Obrigado por jogar!")
+			if mapa.saida != "":
+				_mostrar_dialogo(mapa.texto_saida, func() -> void:
+					Jogo.mapa_atual = mapa.saida
+					Jogo.pedir_mapa(mapa.saida))
+			else:
+				_mostrar_dialogo("A escada sobe para a luz dos Nove Sóis... e para os Cruzados lá fora.\nFim da demonstração. Obrigado por jogar!")
 
 
 func _pegar_pedra(pos: Vector2i) -> void:
@@ -455,6 +479,26 @@ func _pegar_pedra(pos: Vector2i) -> void:
 	_atualizar_hud()
 	_mostrar_dialogo({"texto": "Você encontrou uma Pedra Solar. Nove sóis gravados brilham fracos na pedra.",
 		"retrato": "res://assets/itens/pedra_solar_96.png"})
+
+
+func _pegar_item(pos: Vector2i) -> void:
+	if not itens_no_chao.has(pos):
+		return
+	var achado: Dictionary = itens_no_chao[pos]
+	itens_no_chao.erase(pos)
+	achado["no"].queue_free()
+	_trocar_tile(pos, ".")
+	Jogo.eventos[achado["id"]] = true
+	var d: Dictionary = Itens.DADOS[achado["item"]]
+	if d.has("slot"):
+		for i in achado["quantidade"]:
+			Jogo.inventario.append(achado["item"])
+	else:
+		Jogo.itens[achado["item"]] = Jogo.itens.get(achado["item"], 0) + achado["quantidade"]
+	_atualizar_hud()
+	var qtd: String = (" x%d" % achado["quantidade"]) if achado["quantidade"] > 1 else ""
+	_mostrar_dialogo({"texto": "Você encontrou: %s%s.\n%s%s" % [d["nome"], qtd, d["descricao"],
+		"\n(Equipe no menu: Esc)" if d.has("slot") else ""], "retrato": Entidade.FOLHA_ITEM})
 
 
 func _interagir() -> void:
@@ -479,6 +523,8 @@ func _interagir() -> void:
 					_mostrar_dialogo("A porta da cela está trancada.")
 			"G":
 				_pegar_pedra(alvo)
+			"J":
+				_pegar_item(alvo)
 
 
 ## Toca a porta da cela abrindo (quadros 4 a 7 da tira) por cima do tile
@@ -514,6 +560,16 @@ func _falar_com(pos: Vector2i) -> void:
 ## Dá um item ao jogador. Ex.: $> dar_item("chave")
 func dar_item(id: String, quantidade := 1) -> void:
 	Jogo.itens[id] = Jogo.itens.get(id, 0) + quantidade
+	_atualizar_hud()
+
+
+## O encapuzado entra na party e sai do mapa. Ex.: $> recrutar()
+func recrutar() -> void:
+	Jogo.recrutar_encapuzado()
+	for pos in npcs.keys():
+		if String(npcs[pos]["id"]).begins_with("encapuzado"):
+			npcs[pos]["no"].queue_free()
+			npcs.erase(pos)
 	_atualizar_hud()
 
 
@@ -675,3 +731,9 @@ func ao_voltar_da_batalha(id: String, venceu: bool) -> void:
 		tregua = 3.0
 	get_meta("feixes").queue_redraw()
 	_atualizar_hud()
+	if venceu and not Jogo.ultimo_saque.is_empty():
+		var nomes := []
+		for item in Jogo.ultimo_saque:
+			nomes.append(Itens.DADOS[item]["nome"])
+		Jogo.ultimo_saque.clear()
+		_mostrar_dialogo("Entre os restos, você encontra: %s." % ", ".join(nomes))

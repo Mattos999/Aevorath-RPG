@@ -8,6 +8,9 @@
 [node name="Prisao" type="Node2D" unique_id=1935049446]
 script = ExtResource("1_ufc2v")
 nome = "Prisão da Igreja do Décimo Dia"
+saida = "res://scenes/mapas/esgoto.tscn"
+texto_saida = "A escada não sobe: desce. Lá embaixo, o fedor dos esgotos sob a catedral.
+É o único caminho que os guardas não vigiam."
 textos = Array[String](["Ossos de um prisioneiro antigo. Entre as costelas, algo brilha em laranja.", "\"No Décimo Dia, os Nove Sóis julgarão os impuros.
 Cem serão entregues, para que mil sejam poupados.\"
 — Inscrição da Igreja do Décimo Dia", "Restos de um Marcado. Nas paredes, marcas de contagem:

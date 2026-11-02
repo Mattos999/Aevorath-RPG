@@ -28,6 +28,9 @@ TERRENO = [
     ("esqueleto", "K"), ("piso_madeira", "."),
     ("chao_musgo", "."), ("chao_poca", "."), ("chao_correntes", "."), ("parede_musgo", "#"),
     ("parede_musgo2", "#"), ("parede_janela", "#"), ("parede_sol", "#"),
+    # Esgotos (demo): artes provisórias de tools/artes_esgoto.py
+    ("esgoto_chao", "."), ("esgoto_chao2", "."), ("esgoto_agua", "w"), ("esgoto_parede", "#"),
+    ("esgoto_cano", "#"), ("esgoto_sol", "*"), ("esgoto_ponte", "."),
 ]
 
 # (imagem, letra). Folhas 3x4 usam o primeiro quadro (de frente).
@@ -36,7 +39,7 @@ ENTIDADES = [
     ("sprites/protagonista2.png", "I"), ("sprites/cruzado.png", "C"),
     ("sprites/oco.png", "O"), ("sprites/sarnheim.png", "N"),
     ("sprites/paladino.png", "V"), ("itens/pedra_solar_48.png", "G"),
-    ("sprites/oca.png", "F"),
+    ("sprites/oca.png", "F"), ("sprites/rato.png", "M"), ("sprites/barata.png", "Y"),
 ]
 
 

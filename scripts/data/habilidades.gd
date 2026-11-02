@@ -14,6 +14,11 @@ class_name Habilidades
 ## "cor" tinge esse efeito.
 ## Magia com "dano_magico" causa esse dano vezes a força da luz (com
 ## "com_arma", soma o golpe da arma).
+## Outros campos: "cura" (HP fixo), "estanca" (para o sangramento),
+## "sanidade" (devolve sanidade), "perfura" (ignora a armadura), "sangria"
+## (faz sangrar), "soma_escudo" (soma o bloqueio do escudo ao dano),
+## "chance_por_hp" (falha mais contra inimigos fortes). Técnicas com alvo
+## "inimigo" e "estado" aplicam o estado se o golpe acertar.
 
 const NOME_SOL := {
 	"vida": "Sol da Vida", "morte": "Sol da Morte", "alma": "Sol da Alma",
@@ -66,7 +71,7 @@ const MAGIAS_POR_SOL := {
 }
 
 ## Passivas que já funcionam no jogo (as outras aparecem como "em breve").
-const PASSIVAS_ATIVAS := ["vida", "morte", "medo"]
+const PASSIVAS_ATIVAS := ["vida", "morte", "medo", "esperanca"]
 
 const PASSIVAS := {
 	"vida": ["Nunca desistir", "Ao chegar a 0 de vida, volta com 1. Uma vez por descanso."],
@@ -91,6 +96,40 @@ const DADOS := {
 		"descricao": "Golpe com toda a força: 10 de dano + arma, difícil de acertar.",
 		"base": 10, "com_arma": true, "requer": "arma", "precisao": 0.75, "efeito": "faisca",
 	},
+	"rasteira": {
+		"nome": "Rasteira", "custo": 2, "alvo": "inimigo",
+		"descricao": "Chute baixo: 3 de dano e chance de derrubar (perde o próximo turno).",
+		"base": 3, "precisao": 1.1, "efeito": "impacto",
+		"estado": {"nome": "atordoado", "valor": 0, "turnos": 1}, "chance": 0.55,
+	},
+	"estocada": {
+		"nome": "Estocada", "custo": 3, "alvo": "inimigo",
+		"descricao": "Ponta da arma entre as placas: 4 de dano + arma, ignora a armadura.",
+		"base": 4, "com_arma": true, "requer": "arma", "perfura": true, "efeito": "corte_reto",
+	},
+	"investida_escudo": {
+		"nome": "Investida com escudo", "custo": 4, "alvo": "inimigo",
+		"descricao": "Avança com o escudo: 5 de dano + bloqueio do escudo, pode atordoar.",
+		"base": 5, "soma_escudo": true, "requer": "escudo", "efeito": "impacto",
+		"estado": {"nome": "atordoado", "valor": 0, "turnos": 1}, "chance": 0.5,
+	},
+	"primeiros_socorros": {
+		"nome": "Primeiros socorros", "custo": 3, "alvo": "aliado",
+		"descricao": "Rasga a roupa e amarra a ferida: +12 HP e estanca o sangramento.",
+		"cura": 12, "estanca": true, "efeito": "luz", "cor": Color(1.0, 0.9, 0.8),
+	},
+	# Técnicas do encapuzado (aliado da demo).
+	"lamina_sombria": {
+		"nome": "Lâmina sombria", "custo": 4, "alvo": "inimigo",
+		"descricao": "Corte rápido nas juntas: 8 de dano + arma e faz sangrar.",
+		"base": 8, "com_arma": true, "requer": "arma", "sangria": true, "precisao": 1.1, "efeito": "corte",
+		"cor": Color(1.0, 0.3, 0.3),
+	},
+	"olhar_vermelho": {
+		"nome": "Olhar vermelho", "custo": 5, "alvo": "inimigo_corpo",
+		"descricao": "Os olhos dele brilham no escuro: o inimigo fica exposto por 3 turnos.",
+		"estado": {"nome": "exposto", "valor": 0, "turnos": 3}, "efeito": "luz", "cor": Color(1.0, 0.2, 0.2),
+	},
 	# ------------------------------------------------------------ Sol da Vida
 	"bencao_vaelora": {
 		"nome": "Bênção de Vaelora", "custo": 4, "alvo": "aliado", "magia": true, "sol": "vida",
@@ -109,11 +148,36 @@ const DADOS := {
 		"estado": {"nome": "veneno", "valor": 5, "turnos": -1}, "efeito": "luz",
 		"cor": Color(0.5, 0.9, 0.2),
 	},
+	"levantar_cadaver": {
+		"nome": "Levantar cadáver", "custo": 6, "alvo": "proprio", "magia": true, "sol": "morte",
+		"descricao": "Um cadáver se ergue e ataca o inimigo a cada turno seu (4 turnos). Falha mais contra inimigos fortes.",
+		"estado": {"nome": "cadaver", "valor": 7, "turnos": 4}, "chance_por_hp": true, "efeito": "luz",
+		"cor": Color(0.6, 0.65, 0.55),
+	},
+	# ------------------------------------------------------------ Sol da Alma
+	"projecao": {
+		"nome": "Projeção", "custo": 5, "alvo": "proprio", "magia": true, "sol": "alma",
+		"descricao": "A alma sai do corpo por 2 turnos: os golpes atravessam você.",
+		"estado": {"nome": "projetado", "valor": 0, "turnos": 2}, "efeito": "luz",
+		"cor": Color(0.66, 0.88, 1.0),
+	},
+	"ouija": {
+		"nome": "Ouija", "custo": 3, "alvo": "inimigo_corpo", "magia": true, "sol": "alma",
+		"descricao": "Os mortos sussurram onde o inimigo é fraco: exposto por 3 turnos (+20% de acerto, +25% de dano).",
+		"estado": {"nome": "exposto", "valor": 0, "turnos": 3}, "efeito": "luz",
+		"cor": Color(0.7, 0.8, 1.0),
+	},
 	# ------------------------------------------------------------ Sol do Tempo
 	"retroceder": {
 		"nome": "Retroceder", "custo": 8, "alvo": "batalha", "magia": true, "sol": "tempo",
 		"descricao": "Volta 1 turno no tempo: tudo fica como no começo da rodada.",
 		"efeito": "luz", "cor": Color(0.7, 0.75, 1.0),
+	},
+	"visualizar": {
+		"nome": "Visualizar", "custo": 3, "alvo": "aliados", "magia": true, "sol": "tempo",
+		"descricao": "Vê fragmentos do que vai acontecer: cada aliado desvia do próximo golpe.",
+		"estado": {"nome": "previsto", "valor": 0, "turnos": -1}, "efeito": "luz",
+		"cor": Color(1.0, 0.82, 0.45),
 	},
 	# ------------------------------------------------------------ Sol da Natureza
 	"cura_natureza": {
@@ -134,12 +198,23 @@ const DADOS := {
 		"estado": {"nome": "encantado", "valor": 40, "turnos": -1}, "efeito": "luz",
 		"cor": Color(1.0, 0.55, 0.8),
 	},
+	"enganar": {
+		"nome": "Enganar", "custo": 4, "alvo": "inimigo_corpo", "magia": true, "sol": "coracao",
+		"descricao": "Mente para o inimigo: no próximo turno ele acredita e golpeia a si mesmo.",
+		"chance": 0.75, "estado": {"nome": "enganado", "valor": 0, "turnos": 2}, "efeito": "luz",
+		"cor": Color(1.0, 0.52, 0.7),
+	},
 	# ------------------------------------------------------------ Sol da Esperança
 	"grito_vontade": {
 		"nome": "Grito de vontade", "custo": 3, "alvo": "aliados", "magia": true, "sol": "esperanca",
 		"descricao": "Aliados ganham +5% de ataque até o fim da batalha.",
 		"estado": {"nome": "forca", "valor": 5, "turnos": -1}, "efeito": "luz",
 		"cor": Color(1.0, 0.85, 0.4),
+	},
+	"restaurar_sanidade": {
+		"nome": "Restaurar sanidade", "custo": 3, "alvo": "aliado", "magia": true, "sol": "esperanca",
+		"descricao": "+10 de sanidade para o alvo (mais com luz forte) e acalma o medo.",
+		"sanidade": 10, "efeito": "luz", "cor": Color(1.0, 1.0, 0.86),
 	},
 	# ------------------------------------------------------------ Sol do Medo
 	"aterrorizar": {
@@ -148,19 +223,17 @@ const DADOS := {
 		"chance": 0.7, "estado": {"nome": "medo", "valor": 0, "turnos": 2}, "efeito": "impacto",
 		"cor": Color(0.6, 0.4, 0.9),
 	},
+	"presenca_ameacadora": {
+		"nome": "Presença ameaçadora", "custo": 5, "alvo": "inimigo_corpo", "magia": true, "sol": "medo",
+		"descricao": "Uma aura que ninguém quer encarar: por 3 turnos o inimigo hesita e erra mais (-40% de acerto).",
+		"estado": {"nome": "ameacado", "valor": 40, "turnos": 3}, "efeito": "luz",
+		"cor": Color(0.58, 0.22, 0.7),
+	},
 }
 
-## Magias que ainda não existem na batalha (precisam de sanidade, invocações
-## ou ações no mapa). Aparecem no menu como "em breve".
-const PLANEJADAS := {
-	"levantar_cadaver": ["Levantar cadáver", "Traz um cadáver como apoio. Quanto mais forte, mais difícil."],
-	"projecao": ["Projeção", "Por 1 hora, a alma sai do corpo e anda pelo mapa, atravessando paredes."],
-	"ouija": ["Ouija", "Falar com os mortos."],
-	"visualizar": ["Visualizar", "Ver fragmentos do passado."],
-	"enganar": ["Enganar", "Mente para o alvo, fazendo-o acreditar em algo."],
-	"restaurar_sanidade": ["Restaurar sanidade", "+10 de sanidade para o alvo."],
-	"presenca_ameacadora": ["Presença ameaçadora", "Aura que impede qualquer pessoa de se aproximar."],
-}
+## Magias que ainda não existem na batalha (aparecem como "em breve").
+## Desde a demo (2026-11-02) todas as magias dos Sóis funcionam.
+const PLANEJADAS := {}
 
 
 ## Por que `c` não pode usar a técnica agora ("" = pode).
@@ -173,6 +246,9 @@ static func impedimento(hid: String, c: Combatente) -> String:
 		"arma":
 			if not c.tem_arma() or not c.pode_atacar_com_arma():
 				return "Precisa de uma arma em mãos."
+		"escudo":
+			if not c.usa_escudo():
+				return "Precisa de um escudo no braço."
 	if c.mp < h["custo"]:
 		return "MP insuficiente."
 	return ""

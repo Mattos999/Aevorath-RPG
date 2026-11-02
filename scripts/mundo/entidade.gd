@@ -2,15 +2,16 @@
 @icon("res://assets/itens/pedra_solar_24.png")
 class_name Entidade
 extends Node2D
-## Algo que vive no mapa: inimigo, NPC ou Pedra Solar no chão.
+## Algo que vive no mapa: inimigo, NPC, Pedra Solar ou item no chão.
 ## Coloque como filho da cena do mapa (botão direito no nó raiz > Adicionar
 ## nó filho > Entidade), arraste até a célula e configure no Inspector.
 ## A posição gruda na grade de 64 px sozinha.
 
-enum Tipo { INIMIGO, NPC, PEDRA_SOLAR }
+enum Tipo { INIMIGO, NPC, PEDRA_SOLAR, ITEM }
 
 const TILE := 64
 const FOLHA_PEDRA := "res://assets/itens/pedra_solar_48.png"
+const FOLHA_ITEM := "res://assets/itens/saco_48.png"
 
 @export var tipo := Tipo.INIMIGO:
 	set(valor):
@@ -19,7 +20,7 @@ const FOLHA_PEDRA := "res://assets/itens/pedra_solar_48.png"
 		queue_redraw()
 
 @export_group("Inimigo")
-@export_enum("cruzado", "oco", "oca", "sarnheim", "paladino") var inimigo := "oco":
+@export_enum("cruzado", "oco", "oca", "sarnheim", "paladino", "rato", "barata", "chefe") var inimigo := "oco":
 	set(valor):
 		inimigo = valor
 		queue_redraw()
@@ -49,6 +50,11 @@ const FOLHA_PEDRA := "res://assets/itens/pedra_solar_48.png"
 @export var cue := "start"
 ## Se este evento já aconteceu (Jogo.eventos), o NPC não aparece.
 @export var some_com_evento := ""
+
+@export_group("Item")
+## Id do item (veja scripts/data/itens.gd), ex.: "bandagem", "erva_amarga".
+@export var item := "bandagem"
+@export_range(1, 99) var quantidade := 1
 
 var _editando := false
 
@@ -81,6 +87,8 @@ func textura() -> String:
 			return Inimigos.DADOS[inimigo]["sprite_mapa"]
 		Tipo.PEDRA_SOLAR:
 			return FOLHA_PEDRA
+		Tipo.ITEM:
+			return FOLHA_ITEM
 	return folha
 
 
@@ -88,7 +96,9 @@ func textura() -> String:
 func _validate_property(propriedade: Dictionary) -> void:
 	var de_inimigo := ["inimigo", "comportamento", "alcance_visao", "intervalo", "direcao_patrulha", "distancia_patrulha"]
 	var de_npc := ["id_npc", "folha", "dialogo", "cue", "some_com_evento"]
-	if (propriedade.name in de_inimigo and tipo != Tipo.INIMIGO) or (propriedade.name in de_npc and tipo != Tipo.NPC):
+	var de_item := ["item", "quantidade"]
+	if (propriedade.name in de_inimigo and tipo != Tipo.INIMIGO) or (propriedade.name in de_npc and tipo != Tipo.NPC) \
+			or (propriedade.name in de_item and tipo != Tipo.ITEM):
 		propriedade.usage = PROPERTY_USAGE_NO_EDITOR
 
 
@@ -105,7 +115,7 @@ func _draw() -> void:
 	if tex.get_width() == TILE * 3 and tex.get_height() == TILE * 4:
 		origem = Rect2(0, 0, TILE, TILE)
 	var destino := Rect2(Vector2.ZERO, Vector2(TILE, TILE))
-	if tipo == Tipo.PEDRA_SOLAR:
+	if tipo in [Tipo.PEDRA_SOLAR, Tipo.ITEM]:
 		destino = Rect2(Vector2(8, 8), Vector2(48, 48))
 	draw_texture_rect_region(tex, destino, origem)
 	draw_rect(Rect2(0, 0, TILE, TILE), Color(1, 0.3, 0.3) if tipo == Tipo.INIMIGO else Color(0.4, 0.8, 1.0), false, 1.0)

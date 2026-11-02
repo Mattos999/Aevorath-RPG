@@ -16,18 +16,23 @@ func _ready() -> void:
 	_testar_equipamento()
 	await _testar_menu()
 	await _testar_mundo()
+	await _testar_esgoto()
+	_testar_magias()
 	await _testar_criacao()
 	# Varia Sol, luz, Pedra Solar e tamanho da party para exercitar a regra da magia.
 	var luzes := ["escuro", "sol", "lua"]
 	var sois := Habilidades.SOIS_INICIAIS.keys()
 	var n := 0
 	for aleatorio in [false, true]:
-		for inimigo in ["oco", "oca", "cruzado", "sarnheim", "paladino"]:
+		for inimigo in ["oco", "oca", "cruzado", "sarnheim", "paladino", "rato", "barata", "chefe"]:
 			for i in 6:
 				n += 1
 				Jogo.novo_jogo("Teste", "masculino" if n % 2 == 0 else "feminino", sois[n % sois.size()])
 				if i % 2 == 1:
 					Jogo.party.append(Jogo.criar_heroi("Segundo", "feminino", sois[(n + 3) % sois.size()]))
+				elif inimigo == "chefe":
+					Jogo.recrutar_encapuzado()
+				Jogo.itens.merge({"erva_amarga": 1, "agua_benta": 1, "tonico_lucidez": 1, "antidoto": 1, "fragmento_solar": 1})
 				if i >= 3:
 					Jogo.ganhar_pedra_solar()
 				Jogo.minutos = 12 * 60 if i % 3 != 2 else 23 * 60
@@ -127,6 +132,83 @@ func _testar_mundo() -> void:
 				_checar(absi(desvio.x) + absi(desvio.y) <= d["distancia"] and desvio.y == 0, "patrulha saiu da linha: %s" % desvio)
 	m.queue_free()
 	print("mundo ok")
+
+
+## Esgotos: entidades, itens no chão, o encapuzado entrando na party e o chefe.
+func _testar_esgoto() -> void:
+	Jogo.novo_jogo()
+	Jogo.mapa_atual = "res://scenes/mapas/esgoto.tscn"
+	var m = load("res://scenes/mundo.tscn").instantiate()
+	m.visao_3d = false
+	add_child(m)
+	await get_tree().process_frame
+	_checar(m.mapa.name == "Esgoto", "deveria carregar o mapa dos esgotos")
+	var tipos := {}
+	for id in m.inimigos:
+		tipos[m.inimigos[id]["tipo"]] = tipos.get(m.inimigos[id]["tipo"], 0) + 1
+	_checar(tipos.get("rato", 0) >= 3 and tipos.get("barata", 0) >= 3 and tipos.get("chefe", 0) == 1,
+		"inimigos dos esgotos: %s" % tipos)
+	_checar(m.itens_no_chao.size() >= 5, "itens no chão: %d" % m.itens_no_chao.size())
+	for linha in m.grade:
+		for c in linha:
+			_checar(c in "#.,~*wJGTAKSRQWXdD|BUo", "letra desconhecida no esgoto: %s" % c)
+	# Pegar um item no chão.
+	var pos: Vector2i = m.itens_no_chao.keys()[0]
+	var item: String = m.itens_no_chao[pos]["item"]
+	var antes: int = Jogo.itens.get(item, 0) + Jogo.inventario.count(item)
+	m._pegar_item(pos)
+	m._avancar_dialogo()
+	_checar(Jogo.itens.get(item, 0) + Jogo.inventario.count(item) > antes and not m.itens_no_chao.has(pos), "pegar item falhou")
+	# O encapuzado entra na party e some do mapa.
+	var npc_pos := Vector2i(-1, -1)
+	for p in m.npcs:
+		if m.npcs[p]["id"] == "encapuzado_esgoto":
+			npc_pos = p
+	_checar(npc_pos != Vector2i(-1, -1), "o encapuzado deveria estar nos esgotos")
+	if npc_pos != Vector2i(-1, -1):
+		await _conversar(m, m.npcs[npc_pos])
+	_checar(Jogo.party.size() == 2 and Jogo.party[1]["id"] == "encapuzado", "o encapuzado deveria entrar na party")
+	_checar(not m.npcs.has(npc_pos), "o encapuzado deveria sair do mapa")
+	m.queue_free()
+	await get_tree().process_frame
+	# Ao recarregar o mapa ele não volta.
+	var m2 = load("res://scenes/mundo.tscn").instantiate()
+	m2.visao_3d = false
+	add_child(m2)
+	await get_tree().process_frame
+	for p in m2.npcs:
+		_checar(m2.npcs[p]["id"] != "encapuzado_esgoto", "o encapuzado voltou ao mapa")
+	m2.queue_free()
+	Jogo.mapa_atual = Jogo.MAPA_INICIAL
+	print("esgoto ok")
+
+
+## Magias novas e sanidade, sem rodar a batalha inteira.
+func _testar_magias() -> void:
+	for sol in Habilidades.MAGIAS_POR_SOL:
+		for hid in Habilidades.MAGIAS_POR_SOL[sol]:
+			_checar(Habilidades.DADOS.has(hid), "magia %s ainda não existe" % hid)
+	var rng := RandomNumberGenerator.new()
+	var h := Combatente.criar(Jogo.criar_heroi("A", "masculino", "alma"), true)
+	_checar(h.sanidade == Combatente.SANIDADE_MAXIMA, "sanidade inicial")
+	_checar(h.perder_sanidade(30) == 30 and h.sanidade == 70, "perder sanidade")
+	h.estados["projetado"] = {"turnos": 2, "valor": 0}
+	_checar(not h.receber_golpe("torso", 50, rng, 1.0, true)["acertou"], "Projeção deveria fazer o golpe atravessar")
+	h.estados.clear()
+	h.estados["previsto"] = {"turnos": -1, "valor": 0}
+	_checar(not h.receber_golpe("torso", 50, rng, 1.0, true)["acertou"] and not h.estados.has("previsto"),
+		"Visualizar desvia uma vez")
+	var alvo := Combatente.criar(Inimigos.DADOS["rato"], false)
+	var normal := alvo.chance_de_ser_acertado("cabeca")
+	alvo.estados["exposto"] = {"turnos": 3, "valor": 0}
+	_checar(alvo.chance_de_ser_acertado("cabeca") > normal, "Ouija deveria expor o inimigo")
+	var dados: Dictionary = h.para_dados(Jogo.criar_heroi("A", "masculino", "alma"))
+	_checar(dados["sanidade_atual"] == 70, "sanidade deveria ser guardada")
+	Jogo.novo_jogo()
+	Jogo.itens["fragmento_solar"] = 1
+	Jogo.usar_item(Jogo.party[0], "fragmento_solar")
+	_checar(Jogo.cargas_solares() == 3, "fragmento solar sem pedra vira pedra de 3")
+	print("magias ok")
 
 
 ## Lê uma conversa inteira escolhendo sempre a primeira resposta.
@@ -284,8 +366,13 @@ func _party_de_teste() -> void:
 	Jogo.equipar(Jogo.party[-1], "colar_sol")
 
 
+const INVENTARIO_TESTE := ["espada_prata", "machado_guerra", "espada_duas_maos", "escudo_madeira",
+	"armadura_couro", "bota_couro", "colar_sol", "brinco_lebre"]
+
+
 func _testar_equipamento() -> void:
 	Jogo.novo_jogo()
+	Jogo.inventario.assign(INVENTARIO_TESTE)
 	var aren: Dictionary = Jogo.party[0]
 	var antes := Combatente.criar(aren, true)
 	_checar(antes.dano_arma == 2 and antes.tipo_arma == "espada", "Aren deveria começar com a espada enferrujada")
@@ -319,6 +406,7 @@ func _testar_equipamento() -> void:
 
 func _testar_menu() -> void:
 	Jogo.novo_jogo()
+	Jogo.inventario.assign(INVENTARIO_TESTE)
 	var menu := MenuJogo.new()
 	add_child(menu)
 	await get_tree().process_frame

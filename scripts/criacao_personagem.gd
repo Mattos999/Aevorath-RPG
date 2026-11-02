@@ -651,10 +651,8 @@ func _atualizar_lista() -> void:
 	var passiva: Array = Habilidades.PASSIVAS[sol]
 	_item(passiva[0], "Passiva" if sol in Habilidades.PASSIVAS_ATIVAS else "Passiva · em breve", passiva[1])
 	var c: Dictionary = Jogo.HEROI_BASE
-	var tecnicas := []
-	for hid in c["habilidades"]:
-		tecnicas.append(Habilidades.DADOS[hid]["nome"])
-	var base := _texto("Todos começam com uma espada enferrujada, %s." % " e ".join(tecnicas), 11, Color(0.5, 0.46, 0.44))
+	var base := _texto("Todos começam com uma espada enferrujada e %d técnicas (veja no menu, Esc)." % c["habilidades"].size(),
+		11, Color(0.5, 0.46, 0.44))
 	lista_sol.add_child(_espaco(2))
 	lista_sol.add_child(base)
 

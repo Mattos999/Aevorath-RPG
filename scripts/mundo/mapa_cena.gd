@@ -11,10 +11,12 @@ extends Node2D
 ##   B  cama   U  balde   R  barril   Q  caixa   o  buraco   (bloqueiam)
 ##   A  Altar dos Nove Sóis (descanso)
 ##   S  placa   K  esqueleto   (mostram os Textos abaixo, na ordem de leitura)
-##   X  escada (fim da demo)
+##   X  escada: leva ao mapa "saida" (vazio = fim da demo)
+##   w  água (bloqueia)    J  item no chão (use a Entidade do tipo Item)
 ## Entidades:
 ##   P  início do jogador   H  o encapuzado
 ##   C  Cruzado   O  Fiel Oco   F  Fiel Oca   N  Soldado de Sarnheim   V  Paladino
+##   M  Rato gigante   Y  Barata gigante
 ##   G  Pedra Solar no chão
 ## Pinte a partir da célula (0, 0) para a direita e para baixo.
 
@@ -22,6 +24,10 @@ extends Node2D
 ## "escuro" para masmorras, "aberto" para lugares sob o céu.
 @export_enum("escuro", "aberto") var luz := "escuro"
 @export_file("*.png") var fundo_batalha := "res://assets/batalha/fundo_prisao.png"
+## Mapa para onde a escada (X) leva. Vazio = a escada encerra a demo.
+@export_file("*.tscn") var saida := ""
+## Texto mostrado antes de trocar de mapa pela escada.
+@export_multiline var texto_saida := "Você desce a escada para o escuro."
 ## Textos das placas (S) e esqueletos (K), na ordem em que aparecem lendo o
 ## mapa linha a linha, da esquerda para a direita.
 @export_multiline var textos: Array[String] = []
