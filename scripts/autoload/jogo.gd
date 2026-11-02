@@ -14,7 +14,6 @@ const PERSONAGENS := {
 		"id": "aren",
 		"nome": "Aren",
 		"titulo": "Prisioneiro",
-		"classe": "Guerreiro",
 		"sol": "",
 		"hp": 65,
 		"mp": 10,
@@ -33,7 +32,6 @@ const PERSONAGENS := {
 		"id": "iselde",
 		"nome": "Iselde",
 		"titulo": "Marcada (Mydrani)",
-		"classe": "Maga",
 		# O Sol que ela segue define as magias (veja Habilidades.MAGIAS_POR_SOL).
 		"sol": "vida",
 		"hp": 50,

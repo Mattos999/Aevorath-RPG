@@ -390,7 +390,8 @@ func _atualizar_personagem() -> void:
 	retrato.texture = load(m["textura"])
 	var sol: String = m.get("sol", "")
 	var t := "[color=#d9b34d][b]%s[/b][/color], %s\n" % [m["nome"], m["titulo"]]
-	t += "Classe: %s    Sol: %s\n\n" % [m.get("classe", "—"), Habilidades.NOME_SOL.get(sol, "nenhum")]
+	# Não há classes: o Sol que o personagem segue define as magias e passivas.
+	t += "Sol: %s\n\n" % Habilidades.NOME_SOL.get(sol, "nenhum")
 	t += "HP: %d / %d\nMP: %d / %d\n" % [c.hp, c.hp_max, c.mp, c.mp_max]
 	t += "Força: %d\nDano da arma: %d\nDano do ataque: %d\n" % [c.ataque, c.dano_arma, c.poder_golpe()]
 	t += "Defesa: %d%% (o dano recebido cai %d%%)\n" % [c.defesa, mini(c.defesa, Combatente.DEFESA_MAXIMA)]
