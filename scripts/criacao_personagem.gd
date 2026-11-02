@@ -69,7 +69,7 @@ class SolDesenho extends Control:
 			var ang := TAU * i / raios + giro
 			var d := Vector3(cos(ang), sin(ang), 0.0)
 			d = d.rotated(Vector3.RIGHT, inclinacao).rotated(Vector3.UP, balanco)
-			var ray := {"d": d, "comp": (1.9 if i % 2 == 0 else 1.55) * pulso,
+			var ray: Dictionary = {"d": d, "comp": (1.9 if i % 2 == 0 else 1.55) * pulso,
 				"largura": 0.2 if i % 2 == 0 else 0.14}
 			(frente if d.z > 0.0 else atras).append(ray)
 		for ray in atras:
@@ -81,10 +81,14 @@ class SolDesenho extends Control:
 	## Raio como um triângulo saindo da superfície da esfera na direção d.
 	func _raio(c: Vector2, r: float, ray: Dictionary, forca: float) -> void:
 		var d: Vector3 = ray["d"]
+		var largura: float = ray["largura"]
+		var comp: float = ray["comp"]
 		var plano := Vector2(d.x, d.y)
-		var lado := Vector2(-d.y, d.x).normalized() * r * ray["largura"]
+		if plano.length() < 0.05:
+			return  # apontando direto para a câmera: não aparece
+		var lado := Vector2(-d.y, d.x).normalized() * r * largura
 		var base := c + plano * r * 0.98
-		var ponta := c + plano * r * ray["comp"]
+		var ponta := c + plano * r * comp
 		var cor := brilho.darkened(0.25 * (1.0 - d.z) * 0.5)
 		cor.a = 0.9 * forca
 		draw_colored_polygon(PackedVector2Array([base - lado, ponta, base + lado]), cor)

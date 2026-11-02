@@ -6,6 +6,8 @@ extends Node
 
 
 func _ready() -> void:
+	# Se algo travar, sai mesmo assim depois de 60 s.
+	get_tree().create_timer(60.0).timeout.connect(get_tree().quit.bind(1))
 	var tela := CriacaoPersonagem.new()
 	add_child(tela)
 	for id in ["vida", "morte", "verde", "medo"]:
