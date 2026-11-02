@@ -39,7 +39,7 @@ jobs:
         run: ./godot --headless --import
 
       - name: Tirar prints
-        run: timeout 120 xvfb-run -a -s "-screen 0 1280x720x24" ./godot --rendering-driver opengl3 --resolution 960x540 --fixed-fps 30 res://tests/print_criacao.tscn
+        run: timeout 150 xvfb-run -a -s "-screen 0 1280x720x24" ./godot --rendering-driver opengl3 --resolution 960x540 --fixed-fps 30 res://tests/print_criacao.tscn
 
       # Os prints também vão para tests/prints/ na própria branch, para quem
       # não consegue baixar artefatos (o push do GITHUB_TOKEN não dispara outro run).

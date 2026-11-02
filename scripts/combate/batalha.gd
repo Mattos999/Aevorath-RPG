@@ -5,6 +5,14 @@ extends Control
 ##
 ## Magia segue a regra da luz (Jogo.forca_magia): sob o sol ou a lua funciona;
 ## no escuro gasta uma carga de Pedra Solar. O inimigo carrega as próprias cargas.
+##
+## Luz da batalha (A = sol, B = lua, C = escuro): começa com a luz do lugar do
+## mapa e aparece na cena (sol ilumina, lua azula, escuro apaga). Habilidades
+## com "muda_luz" trocam a luz por alguns turnos (rodadas) e depois ela volta
+## à do mapa. No escuro todo mundo erra mais (PRECISAO_ESCURO).
+##
+## Menu: Atacar (golpe básico da arma), Habilidade (Bloquear, Falar, Fugir e
+## técnicas aprendidas), Magia e Item.
 
 signal terminou(resultado: String)  # "vitoria", "derrota" ou "fuga"
 signal _escolha(valor)
@@ -25,6 +33,14 @@ const QUADROS_RAIO := 8
 ## Ponto da mão do raio do paladino na textura de batalha.
 const MAO_RAIO := Vector2(163, 100)
 const NOME_LUZ := {"sol": "Sob o sol", "lua": "Sob a lua", "escuro": "No escuro"}
+## No escuro, a chance de acerto de todos é multiplicada por isto.
+const PRECISAO_ESCURO := 0.75
+## Visual de cada luz: [tinta multiplicada na cena, brilho somado, força do brilho].
+const VISUAL_LUZ := {
+	"sol": [Color(1.0, 0.96, 0.88), Color(1.0, 0.8, 0.45), 0.22],
+	"lua": [Color(0.55, 0.62, 0.85), Color(0.6, 0.7, 1.0), 0.08],
+	"escuro": [Color(0.3, 0.27, 0.33), Color(0, 0, 0), 0.0],
+}
 
 ## Peso de cada parte quando o inimigo escolhe onde bater.
 const PESO_MIRA_INIMIGO := {"cabeca": 12, "torso": 40, "braco_esq": 16, "braco_dir": 16, "pernas": 16}
@@ -50,6 +66,12 @@ var menu: VBoxContainer
 var dica: Label
 var texto_luz: Label
 var luz := "escuro"
+## Luz do lugar no mapa (a batalha volta a ela quando um efeito acaba).
+var luz_mapa := "escuro"
+## Rodadas que faltam para a luz trocada voltar à do mapa (0 = é a do mapa).
+var luz_turnos := 0
+var tinta_luz: ColorRect
+var brilho_luz: ColorRect
 var cartoes: Array[Dictionary] = []
 ## Membro -> TextureRect da figura de costas (só quem tem arte de costas).
 var figuras: Dictionary = {}
@@ -60,6 +82,7 @@ var pose_temporaria: Dictionary = {}
 func _ready() -> void:
 	rng = Jogo.rng
 	luz = Jogo.luz_batalha
+	luz_mapa = luz
 	inimigo = Combatente.criar(Inimigos.DADOS[inimigo_id], false)
 	for dados in Jogo.party:
 		party.append(Combatente.criar(dados, true))
@@ -117,6 +140,38 @@ func _montar_interface() -> void:
 
 	for c in figuras:
 		add_child(figuras[c])
+
+	# Luz da cena: tinta multiplicada (com vinheta) e um brilho somado vindo de cima.
+	tinta_luz = ColorRect.new()
+	tinta_luz.set_anchors_preset(Control.PRESET_FULL_RECT)
+	tinta_luz.size = Vector2(960, 540)
+	tinta_luz.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	tinta_luz.material = _shader_luz("""
+shader_type canvas_item;
+render_mode blend_mul;
+uniform vec4 cor : source_color = vec4(1.0);
+void fragment() {
+	float d = distance(UV, vec2(0.5, 0.4));
+	COLOR = vec4(mix(cor.rgb, cor.rgb * 0.45, smoothstep(0.35, 0.85, d)), 1.0);
+}
+""")
+	add_child(tinta_luz)
+	brilho_luz = ColorRect.new()
+	brilho_luz.set_anchors_preset(Control.PRESET_FULL_RECT)
+	brilho_luz.size = Vector2(960, 540)
+	brilho_luz.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	brilho_luz.material = _shader_luz("""
+shader_type canvas_item;
+render_mode blend_add;
+uniform vec4 cor : source_color = vec4(1.0);
+uniform float forca = 0.0;
+void fragment() {
+	float raio = smoothstep(0.9, 0.0, distance(UV, vec2(0.3, -0.1)));
+	COLOR = vec4(cor.rgb * raio * forca, 1.0);
+}
+""")
+	add_child(brilho_luz)
+	_visual_luz(false)
 
 	var painel_log := _painel(Vector2(300, 296), Vector2(360, 62), Color(0, 0, 0, 0.75))
 	add_child(painel_log)
@@ -191,6 +246,63 @@ func _barra(cor: Color) -> ProgressBar:
 	return barra
 
 
+func _shader_luz(codigo: String) -> ShaderMaterial:
+	var shader := Shader.new()
+	shader.code = codigo
+	var m := ShaderMaterial.new()
+	m.shader = shader
+	return m
+
+
+## Ajusta a cena para a luz atual (com `animado`, faz a transição devagar).
+func _visual_luz(animado := true) -> void:
+	var v: Array = VISUAL_LUZ[luz]
+	var m_tinta := tinta_luz.material as ShaderMaterial
+	var m_brilho := brilho_luz.material as ShaderMaterial
+	if not animado:
+		m_tinta.set_shader_parameter("cor", v[0])
+		m_brilho.set_shader_parameter("cor", v[1])
+		m_brilho.set_shader_parameter("forca", v[2])
+		return
+	var tween := create_tween().set_parallel()
+	tween.tween_method(func(c): m_tinta.set_shader_parameter("cor", c),
+		m_tinta.get_shader_parameter("cor"), v[0], 0.8)
+	tween.tween_method(func(c): m_brilho.set_shader_parameter("cor", c),
+		m_brilho.get_shader_parameter("cor"), v[1], 0.8)
+	tween.tween_method(func(f): m_brilho.set_shader_parameter("forca", f),
+		m_brilho.get_shader_parameter("forca"), v[2], 0.8)
+
+
+## Troca a luz da batalha por `turnos` rodadas (depois volta à do mapa).
+func _mudar_luz(nova: String, turnos: int) -> void:
+	if nova == luz:
+		luz_turnos = maxi(luz_turnos, turnos)
+		return
+	luz = nova
+	luz_turnos = turnos if nova != luz_mapa else 0
+	_visual_luz()
+	match nova:
+		"escuro": _registrar("Tudo escurece. Os golpes vão errar mais.")
+		"sol": _registrar("Um clarão de sol enche o lugar!")
+		"lua": _registrar("Uma luz fria de lua toma o lugar.")
+
+
+## Começo de rodada: a luz trocada perde um turno e pode voltar à do mapa.
+func _passar_turno_luz() -> void:
+	if luz_turnos <= 0:
+		return
+	luz_turnos -= 1
+	if luz_turnos == 0 and luz != luz_mapa:
+		luz = luz_mapa
+		_visual_luz()
+		_registrar("A luz volta ao que era: %s." % NOME_LUZ[luz].to_lower())
+		await _pausa(0.6)
+
+
+func _precisao_luz(precisao: float) -> float:
+	return precisao * (PRECISAO_ESCURO if luz == "escuro" else 1.0)
+
+
 func _criar_cartao(c: Combatente, pos: Vector2) -> void:
 	var painel := _painel(pos, Vector2(355, 160), Color(0.1, 0.07, 0.08))
 	add_child(painel)
@@ -229,7 +341,10 @@ func _atualizar_tudo() -> void:
 	if not inimigo.estados.is_empty():
 		nome_inimigo.text += "  [%s]" % inimigo.descricao_estados()
 	var forca := Jogo.forca_magia(luz)
-	var texto := "%s · %s · magia %d%%" % [Jogo.texto_relogio(), NOME_LUZ[luz], roundi(forca * 100)]
+	var texto := "%s · %s%s · magia %d%%" % [Jogo.texto_relogio(), NOME_LUZ[luz],
+		(" (%d turnos)" % luz_turnos) if luz_turnos > 0 else "", roundi(forca * 100)]
+	if luz == "escuro":
+		texto += " · acerto -%d%%" % roundi((1.0 - PRECISAO_ESCURO) * 100)
 	if luz == "escuro":
 		texto += (" · Pedra Solar: %d cargas" % Jogo.cargas_solares()) if Jogo.tem_pedra_solar() else " · sem Pedra Solar"
 	texto_luz.text = texto
@@ -362,7 +477,7 @@ func _input(evento: InputEvent) -> void:
 func _menu_mira(atacante: Combatente, precisao := 1.0, ignora_esquiva := false) -> Variant:
 	var opcoes := []
 	for parte in inimigo.partes_intactas():
-		var chance := 0.98 if ignora_esquiva else inimigo.chance_de_ser_acertado(parte, precisao)
+		var chance := 0.98 if ignora_esquiva else inimigo.chance_de_ser_acertado(parte, _precisao_luz(precisao))
 		opcoes.append({
 			"texto": "%s  (%d%%)" % [Combatente.NOME_PARTE[parte], roundi(chance * 100)],
 			"valor": parte,
@@ -392,20 +507,25 @@ func _menu_aliado() -> Variant:
 
 func _escolher_acao(c: Combatente) -> Dictionary:
 	while true:
+		var golpe := c.ataque_basico()
 		var principal = await _menu([
 			{"texto": "Atacar", "valor": "atacar", "dica": _dica_ataque(c)},
-			{"texto": "Habilidade", "valor": "habilidade", "dica": "Magias e técnicas."},
+			{"texto": "Habilidade", "valor": "habilidade", "dica": "Bloquear, falar, fugir e técnicas."},
+			{"texto": "Magia", "valor": "magia", "dica": "Magias do seu Sol. Precisam de luz.",
+				"desabilitado": _magias(c).is_empty()},
 			{"texto": "Item", "valor": "item", "dica": "Bandagens: %d" % Jogo.itens.get("bandagem", 0)},
-			{"texto": "Bloquear", "valor": "defender", "dica": "Bloqueio: +%d de defesa e metade do dano até o próximo turno." % Combatente.DEFESA_BLOQUEIO},
-			{"texto": "Fugir", "valor": "fugir", "dica": "Impossível sem pernas."},
 		])
 		match principal:
 			"atacar":
-				var parte = await _menu_mira(c)
+				var parte = await _menu_mira(c, golpe["precisao"])
 				if parte != null:
 					return {"tipo": "atacar", "parte": parte}
 			"habilidade":
 				var acao := await _escolher_habilidade(c)
+				if not acao.is_empty():
+					return acao
+			"magia":
+				var acao := await _escolher_magia(c)
 				if not acao.is_empty():
 					return acao
 			"item":
@@ -414,16 +534,18 @@ func _escolher_acao(c: Combatente) -> Dictionary:
 				var alvo = await _menu_aliado()
 				if alvo != null:
 					return {"tipo": "item", "item": "bandagem", "alvo": alvo}
-			"defender":
-				return {"tipo": "defender"}
-			"fugir":
-				return {"tipo": "fugir"}
 	return {}
 
 
 func _dica_ataque(c: Combatente) -> String:
-	var texto := "Golpe com a arma." if c.tem_arma() and c.pode_atacar_com_arma() else "Golpe desarmado."
-	if c.tem_efeito("ataque_extra") and c.pode_atacar_com_arma():
+	var golpe := c.ataque_basico()
+	var texto := "%s: " % golpe["nome"]
+	match golpe["nome"]:
+		"Soco": texto += "golpe de mão livre."
+		"Chute": texto += "sem braços, só resta chutar."
+		"Golpe pesado": texto += "arma de duas mãos, mais forte e menos preciso."
+		_: texto += "golpe com a arma."
+	if c.tem_efeito("ataque_extra") and c.tem_arma() and c.pode_atacar_com_arma():
 		texto += " Brinco da Lebre: ataca duas vezes."
 	return texto
 
@@ -434,26 +556,60 @@ func _pode_magia(c: Combatente) -> bool:
 	return Jogo.forca_magia(luz) > 0.0 or (c.tem_efeito("magia_no_escuro") and not c.colar_usado)
 
 
+func _tecnicas(c: Combatente) -> Array:
+	return c.habilidades.filter(func(hid): return not Habilidades.DADOS[hid].get("magia", false))
+
+
+func _magias(c: Combatente) -> Array:
+	return c.habilidades.filter(func(hid): return Habilidades.DADOS[hid].get("magia", false))
+
+
+## Habilidade: Bloquear, Falar e Fugir (todos têm) e as técnicas aprendidas.
 func _escolher_habilidade(c: Combatente) -> Dictionary:
-	var opcoes := []
-	for hid in c.habilidades:
+	var bloqueio := "Bloquear com escudo" if c.usa_escudo() else "Bloquear"
+	var opcoes := [
+		{"texto": bloqueio, "valor": "defender",
+			"dica": "+%d de defesa e metade do dano até o próximo turno." % c.defesa_bloqueio()},
+		{"texto": "Falar", "valor": "falar", "dica": "Tentar conversar com %s." % inimigo.nome},
+		{"texto": "Fugir", "valor": "fugir", "dica": "Impossível sem pernas."},
+	]
+	for hid in _tecnicas(c):
 		var h: Dictionary = Habilidades.DADOS[hid]
-		var magia: bool = h.get("magia", false)
+		var motivo := Habilidades.impedimento(hid, c)
+		opcoes.append({"texto": "%s (%s)" % [h["nome"], Habilidades.texto_custo(hid)], "valor": hid,
+			"desabilitado": motivo != "", "dica": motivo if motivo != "" else h["descricao"]})
+	var escolha = await _menu(opcoes, true)
+	match escolha:
+		null:
+			return {}
+		"defender", "falar", "fugir":
+			return {"tipo": escolha}
+	return await _alvo_da_habilidade(c, escolha)
+
+
+func _escolher_magia(c: Combatente) -> Dictionary:
+	var opcoes := []
+	for hid in _magias(c):
+		var h: Dictionary = Habilidades.DADOS[hid]
 		var motivo := Habilidades.impedimento(hid, c)
 		var texto_dica: String = h["descricao"]
 		if motivo != "":
 			pass
-		elif magia and not _pode_magia(c):
+		elif not _pode_magia(c):
 			motivo = "Sem luz, a magia não responde. Procure um feixe de sol ou uma Pedra Solar."
-		elif magia and Jogo.forca_magia(luz) <= 0.0:
+		elif Jogo.forca_magia(luz) <= 0.0:
 			texto_dica += " Usa o Colar do Sol (uma vez por batalha)."
-		elif magia and luz == "escuro":
+		elif luz == "escuro":
 			texto_dica += " Gasta 1 carga da Pedra Solar."
 		opcoes.append({"texto": "%s (%s)" % [h["nome"], Habilidades.texto_custo(hid)], "valor": hid,
 			"desabilitado": motivo != "", "dica": motivo if motivo != "" else texto_dica})
 	var hid = await _menu(opcoes, true)
 	if hid == null:
 		return {}
+	return await _alvo_da_habilidade(c, hid)
+
+
+func _alvo_da_habilidade(c: Combatente, hid: String) -> Dictionary:
 	var h: Dictionary = Habilidades.DADOS[hid]
 	match h["alvo"]:
 		"inimigo":
@@ -482,6 +638,7 @@ func _rodar_batalha() -> void:
 		ordem.append(inimigo)
 		ordem.shuffle()
 		ordem.sort_custom(func(a, b): return a.agilidade_efetiva() > b.agilidade_efetiva())
+		await _passar_turno_luz()
 		foto_rodada = [inimigo.foto()]
 		for c in party:
 			foto_rodada.append(c.foto())
@@ -593,23 +750,35 @@ func _dano_base(c: Combatente, mult := 1.0, base := 0, com_arma := true) -> int:
 	return roundi(c.poder_golpe(base, com_arma) * mult * rng.randf_range(0.85, 1.15))
 
 
+## Dano de golpe físico da party, com chance de crítico pela Sorte.
+func _dano_fisico(c: Combatente, mult := 1.0, base := 0, com_arma := true) -> int:
+	var dano := _dano_base(c, mult, base, com_arma)
+	if rng.randf() < c.chance_critico():
+		dano = roundi(dano * Combatente.MULT_CRITICO)
+		_registrar("Golpe crítico!")
+	return dano
+
+
 func _executar(c: Combatente, acao: Dictionary) -> void:
 	match acao["tipo"]:
 		"atacar":
+			var golpe := c.ataque_basico()
 			var armado := c.tem_arma() and c.pode_atacar_com_arma()
-			var verbo := "ataca" if armado else ("soca" if c.pode_atacar_com_arma() else "chuta")
 			var golpes := 2 if armado and c.tem_efeito("ataque_extra") else 1
+			c.contar_estilo("fisico")
 			for i in golpes:
 				if not inimigo.vivo():
 					break
 				var parte: String = acao["parte"]
 				if inimigo.decepado(parte):
 					parte = "torso"
-				_registrar("%s %s %s%s." % [c.nome, verbo, _onde(inimigo, parte), " de novo" if i > 0 else ""])
+				_registrar("%s %s %s%s." % [c.nome, golpe["verbo"], _onde(inimigo, parte), " de novo" if i > 0 else ""])
 				await _pausa(0.5)
-				var efeito := ("corte" if rng.randf() < 0.5 else "corte_reto") if armado else "impacto"
+				var efeito: String = golpe["efeito"]
+				if efeito == "corte" and rng.randf() < 0.5:
+					efeito = "corte_reto"
 				_pose(c, "soco", 0.7)
-				await _golpear(inimigo, parte, _dano_base(c), 1.0, false, efeito)
+				await _golpear(inimigo, parte, _dano_fisico(c, golpe["mult"]), golpe["precisao"], false, efeito)
 		"habilidade":
 			await _usar_habilidade(c, acao)
 		"item":
@@ -622,8 +791,14 @@ func _executar(c: Combatente, acao: Dictionary) -> void:
 		"defender":
 			_efeito("bloqueio", _pos_alvo(c, "torso"))
 			c.defendendo = true
+			c.contar_estilo("defesa")
 			_pose(c, "guarda")
-			_registrar("%s bloqueia." % c.nome)
+			_registrar("%s %s." % [c.nome, "se protege atrás do escudo" if c.usa_escudo() else "bloqueia"])
+		"falar":
+			_registrar("%s tenta falar com %s." % [c.nome, inimigo.nome])
+			await _pausa(0.7)
+			var falas: Array = Inimigos.DADOS[inimigo_id].get("falas", [])
+			_registrar(falas[rng.randi() % falas.size()] if not falas.is_empty() else "%s não responde." % inimigo.nome)
 		"fugir":
 			var chance := CHANCE_FUGA
 			for membro in party:
@@ -641,7 +816,9 @@ func _executar(c: Combatente, acao: Dictionary) -> void:
 func _usar_habilidade(c: Combatente, acao: Dictionary) -> void:
 	var h: Dictionary = Habilidades.DADOS[acao["id"]]
 	var forca := 1.0
+	c.contar_estilo("magia_" + h["sol"] if h.get("magia", false) else "fisico")
 	if h.get("magia", false):
+		c.contar_estilo("magia")
 		forca = Jogo.forca_magia(luz)
 		if forca <= 0.0:
 			c.colar_usado = true
@@ -651,6 +828,8 @@ func _usar_habilidade(c: Combatente, acao: Dictionary) -> void:
 		elif luz == "escuro" and Jogo.gastar_carga_solar():
 			_registrar("O último sol gravado na Pedra Solar se apaga. Ela vira pó.")
 			await _pausa(0.6)
+		# Conexão com os Sóis pesa junto com a luz.
+		forca *= c.mult_magia()
 	if h["alvo"] == "batalha":
 		# Retroceder: volta todos para o começo da rodada; o MP gasto não volta.
 		inimigo.restaurar(foto_rodada[0])
@@ -668,16 +847,20 @@ func _usar_habilidade(c: Combatente, acao: Dictionary) -> void:
 	await _pausa(0.5)
 	var efeito: String = h.get("efeito", "")
 	var cor: Color = h.get("cor", Color.WHITE)
+	if h.has("muda_luz"):
+		_efeito(efeito, Vector2(480, 200), 3.0, 0.7, cor)
+		_mudar_luz(h["muda_luz"]["luz"], h["muda_luz"]["turnos"])
+		return
 	var alvos: Array[Combatente] = []
 	match h["alvo"]:
 		"inimigo":
 			var dano := 0
 			if h.has("dano_magico"):
-				dano = roundi(h["dano_magico"] * forca * rng.randf_range(0.85, 1.15))
+				dano = roundi(h["dano_magico"] * forca * c.mult_dano_magico() * rng.randf_range(0.85, 1.15))
 				if h.get("com_arma", false):
 					dano += _dano_base(c, 1.0, h.get("base", 0), true)
 			else:
-				dano = _dano_base(c, 1.0, h.get("base", 0), h.get("com_arma", false))
+				dano = _dano_fisico(c, 1.0, h.get("base", 0), h.get("com_arma", false))
 			await _golpear(inimigo, acao["parte"], dano, h.get("precisao", 1.0), h.get("ignora_esquiva", false), efeito, cor)
 			return
 		"inimigo_corpo":
@@ -693,7 +876,7 @@ func _usar_habilidade(c: Combatente, acao: Dictionary) -> void:
 	for alvo in alvos:
 		_efeito(efeito, _pos_alvo(alvo, "torso"), 1.0, 1.0, cor)
 		if h.has("cura_pct"):
-			var curado := alvo.curar(maxi(1, roundi(alvo.hp_max * h["cura_pct"] / 100.0 * forca)))
+			var curado := alvo.curar(maxi(1, roundi(alvo.hp_max * h["cura_pct"] / 100.0 * forca * c.mult_cura())))
 			_registrar("%s recupera %d HP." % [alvo.nome, curado])
 		if h.has("estado"):
 			if rng.randf() > h.get("chance", 1.0):
@@ -722,9 +905,17 @@ func _turno_inimigo(c: Combatente) -> void:
 	# Magia do inimigo segue a mesma regra da luz, com as Pedras Solares dele.
 	var golpes := []
 	for g in c.ataques:
+		if g.has("muda_luz") and g["muda_luz"]["luz"] == luz:
+			continue  # já está nessa luz
 		if not g.get("magia", false) or luz != "escuro" or c.cargas_solares > 0:
 			golpes.append(g)
 	var golpe: Dictionary = golpes[rng.randi() % golpes.size()]
+	if golpe.has("muda_luz"):
+		_registrar("%s usa %s." % [c.nome, golpe["nome"]])
+		await _pausa(0.5)
+		_mudar_luz(golpe["muda_luz"]["luz"], golpe["muda_luz"]["turnos"])
+		await _pausa()
+		return
 	if not c.pode_atacar_com_arma():
 		golpe = {"nome": "Investida desesperada", "mult": 0.8, "efeito": "impacto"}
 	var magia: bool = golpe.get("magia", false)
@@ -772,7 +963,7 @@ func _onde(alvo: Combatente, parte: String) -> String:
 
 func _golpear(alvo: Combatente, parte: String, dano: int, precisao := 1.0, ignora_esquiva := false,
 		efeito := "corte", cor := Color.WHITE) -> Dictionary:
-	var r := alvo.receber_golpe(parte, dano, rng, precisao, ignora_esquiva)
+	var r := alvo.receber_golpe(parte, dano, rng, _precisao_luz(precisao), ignora_esquiva)
 	var pos := _pos_alvo(alvo, parte)
 	if not r["acertou"]:
 		_efeito("impacto", pos + Vector2(rng.randf_range(-40, 40), -20), 0.5, 0.45)

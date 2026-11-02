@@ -1,16 +1,18 @@
 class_name Itens
-## Itens do jogo. Equipamentos têm "slot" (arma, corpo, pes ou acessorio).
+## Itens do jogo. Equipamentos têm "slot" (arma, escudo, corpo, pes ou acessorio).
 ##   dano        soma ao dano dos golpes armados
 ##   defesa      reduz o dano recebido em % (25 = corta 25% do dano)
 ##   mobilidade  soma à agilidade (ordem dos turnos e esquiva)
 ##   tipo_arma   "espada" ou "machado" (algumas técnicas pedem espada)
+##   maos        2 = arma de duas mãos (golpe pesado, sem escudo)
+##   bloqueio    escudo: soma à defesa ao Bloquear (veja Combatente)
 ##   efeito      regra especial (ver Combatente e a batalha)
 ## Consumíveis têm "uso" e ficam empilhados em Jogo.itens.
 
-## Slots do personagem: 1 arma, 2 armaduras (corpo e pés) e 3 acessórios.
-const SLOTS := ["arma", "corpo", "pes", "acessorio1", "acessorio2", "acessorio3"]
+## Slots do personagem: 1 arma, 1 escudo, 2 armaduras (corpo e pés) e 3 acessórios.
+const SLOTS := ["arma", "escudo", "corpo", "pes", "acessorio1", "acessorio2", "acessorio3"]
 const NOME_SLOT := {
-	"arma": "Arma", "corpo": "Armadura", "pes": "Calçado",
+	"arma": "Arma", "escudo": "Escudo", "corpo": "Armadura", "pes": "Calçado",
 	"acessorio1": "Acessório 1", "acessorio2": "Acessório 2", "acessorio3": "Acessório 3",
 }
 
@@ -24,12 +26,16 @@ const DADOS := {
 		"descricao": "Leve e bem equilibrada.",
 	},
 	"espada_duas_maos": {
-		"nome": "Espada de duas mãos", "slot": "arma", "tipo_arma": "espada", "dano": 12,
+		"nome": "Espada de duas mãos", "slot": "arma", "tipo_arma": "espada", "dano": 12, "maos": 2,
 		"descricao": "Pesada demais para qualquer um.",
 	},
 	"machado_guerra": {
 		"nome": "Machado de guerra", "slot": "arma", "tipo_arma": "machado", "dano": 8,
 		"descricao": "Feito para rachar escudos e crânios.",
+	},
+	"escudo_madeira": {
+		"nome": "Escudo de madeira", "slot": "escudo", "bloqueio": 3,
+		"descricao": "Tábuas pregadas. Aguenta alguns golpes.",
 	},
 	"panos_velhos": {
 		"nome": "Panos velhos", "slot": "corpo", "defesa": 0,
@@ -84,6 +90,10 @@ static func resumo(item_id: String) -> String:
 	var partes := []
 	if d.has("dano"):
 		partes.append("+%d de dano" % d["dano"])
+	if d.get("maos", 1) == 2:
+		partes.append("duas mãos")
+	if d.has("bloqueio"):
+		partes.append("+%d ao bloquear" % d["bloqueio"])
 	if d.has("defesa"):
 		partes.append("%d de defesa" % d["defesa"])
 	if d.get("mobilidade", 0) != 0:

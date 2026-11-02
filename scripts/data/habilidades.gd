@@ -40,14 +40,6 @@ const COR_SOL := {
 	"medo": [Color(0.24, 0.05, 0.3), Color(0.58, 0.22, 0.7)],
 }
 
-## Atributos que cada Sol pede (definidos pelo Carlos em 2026-11-02; os
-## atributos ainda não existem no jogo, por enquanto é só informativo).
-const FOCO_SOL := {
-	"vida": "Constituição e Sabedoria", "morte": "Inteligência", "alma": "Conexão",
-	"tempo": "Destreza", "verde": "Constituição", "coracao": "Sorte e Conexão",
-	"esperanca": "Força e Sorte", "medo": "Força",
-}
-
 ## Uma frase sobre cada Sol, mostrada sob o nome na tela de criação.
 const RESUMO_SOL := {
 	"vida": "Cura, resistência e a teimosia de voltar de onde ninguém volta.",

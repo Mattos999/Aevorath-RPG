@@ -2,6 +2,8 @@ class_name Inimigos
 ## Dados dos inimigos. As regiões são retângulos (em pixels) na textura de
 ## batalha de cada inimigo e definem onde o jogador mira cada membro.
 ## "defesa" é a % de dano que a armadura corta.
+## Ataques com "muda_luz" não dão dano: trocam a luz da batalha por alguns
+## turnos. "falas" (opcional) são as respostas quando o jogador usa Falar.
 
 const DADOS := {
 	"cruzado": {
@@ -44,6 +46,8 @@ const DADOS := {
 		"ataques": [
 			{"nome": "Arranhão", "mult": 0.9},
 			{"nome": "Mordida faminta", "mult": 1.4, "precisao": 0.7},
+			# Reza para um deus que não responde e a luz some.
+			{"nome": "Prece apagada", "muda_luz": {"luz": "escuro", "turnos": 3}},
 		],
 		"regioes": {
 			"cabeca": Rect2(52, 26, 58, 70),
@@ -120,6 +124,7 @@ const DADOS := {
 		"ataques": [
 			{"nome": "Corte sagrado", "mult": 1.0},
 			{"nome": "Raio do Décimo Dia", "poder": 18, "magia": true, "ignora_esquiva": true, "efeito": "raio"},
+			{"nome": "Clarão do Décimo Dia", "muda_luz": {"luz": "sol", "turnos": 2}},
 		],
 		"regioes": {
 			"cabeca": Rect2(82, 36, 28, 34),

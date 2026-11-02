@@ -29,9 +29,10 @@ const SEXOS := {
 	},
 }
 
-## Atributos, técnicas e equipamento iniciais, iguais para todos.
+## Técnicas e equipamento iniciais, iguais para todos. HP, MP, força e
+## agilidade saem dos atributos (Atributos.status).
 const HEROI_BASE := {
-	"hp": 65, "mp": 14, "ataque": 8, "defesa": 0, "agilidade": 10,
+	"defesa": 0,
 	"habilidades": ["corte_preciso", "golpe_destruidor"],
 	"equipamento": {"arma": "espada_enferrujada", "corpo": "panos_velhos", "pes": "calcados_velhos"},
 }
@@ -60,7 +61,7 @@ var rng := RandomNumberGenerator.new()
 
 
 ## Escolhas da tela de criação (usadas de novo ao recomeçar).
-var criacao := {"nome": "Aren", "sexo": "masculino", "sol": "vida"}
+var criacao := {"nome": "Aren", "sexo": "masculino", "sol": "vida", "atributos": {}}
 
 
 func _ready() -> void:
@@ -68,36 +69,40 @@ func _ready() -> void:
 	novo_jogo()
 
 
-## Monta o protagonista a partir das escolhas da tela de criação. O Sol
-## seguido soma as magias dele (as que já existem na batalha) às técnicas.
-static func criar_heroi(nome: String, sexo: String, sol := "") -> Dictionary:
+## Monta o protagonista a partir das escolhas da tela de criação. Sem
+## atributos, usa a build pronta do Sol. O Sol seguido soma as magias dele
+## (as que já existem na batalha) às técnicas.
+static func criar_heroi(nome: String, sexo: String, sol := "", atributos := {}) -> Dictionary:
 	var s: Dictionary = SEXOS[sexo]
 	var c: Dictionary = HEROI_BASE
+	var at: Dictionary = atributos.duplicate() if not atributos.is_empty() else Atributos.BUILD_SOL.get(sol, Atributos.BUILD_SOL["vida"]).duplicate()
+	var st := Atributos.status(at)
 	var hp_partes := {}
 	for parte in PROPORCAO_PARTES:
-		hp_partes[parte] = roundi(c["hp"] * PROPORCAO_PARTES[parte])
+		hp_partes[parte] = roundi(st["hp"] * PROPORCAO_PARTES[parte])
 	var habilidades: Array = c["habilidades"].duplicate()
 	for hid in Habilidades.MAGIAS_POR_SOL.get(sol, []):
 		if Habilidades.DADOS.has(hid) and not hid in habilidades:
 			habilidades.append(hid)
 	return {
 		"id": "heroi", "nome": nome.strip_edges() if nome.strip_edges() != "" else s["nome_padrao"],
-		"sexo": sexo, "titulo": "Prisioneiro", "sol": sol,
-		"hp": c["hp"], "mp": c["mp"], "ataque": c["ataque"], "defesa": c["defesa"], "agilidade": c["agilidade"],
+		"sexo": sexo, "titulo": "Prisioneiro", "sol": sol, "atributos": at,
+		"hp": st["hp"], "mp": st["mp"], "ataque": st["ataque"], "defesa": c["defesa"], "agilidade": st["agilidade"],
 		"textura": s["textura"], "costas": s["costas"], "folha_mapa": s["folha_mapa"],
 		"habilidades": habilidades, "equipamento": c["equipamento"].duplicate(),
-		"hp_partes": hp_partes,
+		"hp_partes": hp_partes, "estilo": {},
 	}
 
 
 ## Começa do zero. Sem argumentos, repete as últimas escolhas da criação.
-func novo_jogo(nome := "", sexo := "", sol := "") -> void:
+func novo_jogo(nome := "", sexo := "", sol := "", atributos := {}) -> void:
 	if sexo != "":
-		criacao = {"nome": nome, "sexo": sexo, "sol": sol}
-	party = [criar_heroi(criacao["nome"], criacao["sexo"], criacao["sol"])]
+		criacao = {"nome": nome, "sexo": sexo, "sol": sol, "atributos": atributos.duplicate()}
+	party = [criar_heroi(criacao["nome"], criacao["sexo"], criacao["sol"], criacao.get("atributos", {}))]
 	itens = {"bandagem": 2}
 	# Provisório, para testar o inventário até os itens estarem no mapa.
-	inventario.assign(["espada_prata", "machado_guerra", "armadura_couro", "bota_couro", "colar_sol", "brinco_lebre"])
+	inventario.assign(["espada_prata", "machado_guerra", "espada_duas_maos", "escudo_madeira",
+		"armadura_couro", "bota_couro", "colar_sol", "brinco_lebre"])
 	pedras_solares.clear()
 	inimigos_derrotados.clear()
 	eventos.clear()
@@ -114,6 +119,28 @@ func nome_heroi() -> String:
 ## {{Jogo.genero("garoto", "garota")}}
 func genero(masculino: String, feminino: String) -> String:
 	return feminino if criacao["sexo"] == "feminino" else masculino
+
+
+## Resumo do estilo que o jogador está construindo, pelo que ele mais usa
+## na batalha (membro["estilo"]: fisico, magia, defesa e magia_<sol>).
+static func texto_estilo(membro: Dictionary) -> String:
+	var e: Dictionary = membro.get("estilo", {})
+	var fisico: int = e.get("fisico", 0)
+	var magia: int = e.get("magia", 0)
+	var defesa: int = e.get("defesa", 0)
+	if fisico + magia + defesa < 3:
+		return "Ainda indefinido. Lute mais para descobrir."
+	if magia > fisico and magia >= defesa:
+		var sol_mais := ""
+		var maior := 0
+		for chave in e:
+			if String(chave).begins_with("magia_") and e[chave] > maior:
+				maior = e[chave]
+				sol_mais = String(chave).trim_prefix("magia_")
+		return "Mais magia" + (" (%s)" % Habilidades.NOME_SOL[sol_mais] if sol_mais != "" else "")
+	if defesa > fisico:
+		return "Mais defesa: espera o momento certo"
+	return "Mais golpes físicos"
 
 
 func party_viva() -> bool:
@@ -153,6 +180,11 @@ func equipar(membro: Dictionary, item_id: String, slot := "") -> bool:
 	if eq.get(slot, "") != "":
 		inventario.append(eq[slot])
 	eq[slot] = item_id
+	# Arma de duas mãos não deixa usar escudo (e vice-versa).
+	if slot == "arma" and Itens.DADOS[item_id].get("maos", 1) == 2:
+		desequipar(membro, "escudo")
+	elif slot == "escudo" and Itens.DADOS.get(eq.get("arma", ""), {}).get("maos", 1) == 2:
+		desequipar(membro, "arma")
 	return true
 
 

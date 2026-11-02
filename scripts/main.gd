@@ -25,8 +25,8 @@ func _ready() -> void:
 ## Tela de criação; ao confirmar, começa um jogo novo com o personagem escolhido.
 func _criar_personagem() -> void:
 	var tela := CriacaoPersonagem.new()
-	tela.concluida.connect(func(nome: String, sexo: String, sol: String) -> void:
-		Jogo.novo_jogo(nome, sexo, sol)
+	tela.concluida.connect(func(nome: String, sexo: String, sol: String, atributos: Dictionary) -> void:
+		Jogo.novo_jogo(nome, sexo, sol, atributos)
 		_ir_para_mundo())
 	add_child(tela)
 

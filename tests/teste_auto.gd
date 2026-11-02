@@ -12,6 +12,7 @@ func _ready() -> void:
 	_testar_mapa()
 	_testar_membros()
 	_testar_luz()
+	_testar_atributos()
 	_testar_equipamento()
 	await _testar_menu()
 	await _testar_mundo()
@@ -153,14 +154,34 @@ func _testar_criacao() -> void:
 	var tela := CriacaoPersonagem.new()
 	add_child(tela)
 	var escolha := []
-	tela.concluida.connect(func(nome, sexo, sol): escolha.assign([nome, sexo, sol]))
+	tela.concluida.connect(func(nome, sexo, sol, at): escolha.assign([nome, sexo, sol, at]))
 	tela.botoes_sexo["feminino"].pressed.emit()
 	_checar(tela.campo_nome.text == "Iselde", "nome padrão deveria seguir o sexo")
 	tela.campo_nome.text = "  Lyra "
 	tela.botoes_sol["verde"].pressed.emit()
 	tela.comecar()
-	_checar(escolha == ["Lyra", "feminino", "verde"], "criação devolveu %s" % [escolha])
-	Jogo.novo_jogo(escolha[0], escolha[1], escolha[2])
+	_checar(escolha.slice(0, 3) == ["Lyra", "feminino", "verde"] and escolha[3] == Atributos.BUILD_SOL["verde"],
+		"criação devolveu %s" % [escolha])
+	# Modo de pontos: o Sol segue os atributos; sem pontos gastos não começa.
+	tela.botoes_modo["pontos"].pressed.emit()
+	tela._zerar()
+	_checar(tela.sol == "" and tela.botao_comecar.disabled, "sem pontos não deveria ter Sol nem poder começar")
+	for i in 8:
+		tela._mudar_ponto("int", 1)
+	tela._mudar_ponto("int", 1)
+	_checar(tela.atributos["int"] == Atributos.MAXIMO and tela.sol == "morte", "8 de Inteligência deveria dar o Sol da Morte")
+	for a in ["for", "sor"]:
+		for i in 6:
+			tela._mudar_ponto(a, 1)
+	_checar(Atributos.gastos(tela.atributos) == Atributos.PONTOS, "deveria ter gastado os 20 pontos")
+	tela._mudar_ponto("con", 1)
+	_checar(tela.atributos["con"] == 0, "não deveria passar de 20 pontos")
+	# Int 8 x For+Sor 12: Esperança ganha pela soma.
+	_checar(tela.sol == "esperanca" and not tela.botao_comecar.disabled, "For 6 + Sor 6 deveria dar Esperança (veio %s)" % tela.sol)
+	tela.comecar()
+	_checar(escolha[2] == "esperanca" and escolha[3]["int"] == 8, "criação por pontos devolveu %s" % [escolha])
+	tela.queue_free()
+	Jogo.novo_jogo(escolha[0], escolha[1], "verde")
 	var heroi: Dictionary = Jogo.party[0]
 	_checar(Jogo.party.size() == 1 and heroi["nome"] == "Lyra" and not heroi.has("classe"), "party errada: %s" % [heroi])
 	_checar(heroi["folha_mapa"].ends_with("protagonista2.png") and "corte_preciso" in heroi["habilidades"], "arte ou técnicas erradas")
@@ -189,6 +210,30 @@ func _testar_criacao() -> void:
 	var morte := Combatente.criar(Jogo.criar_heroi("M", "masculino", "morte"), true)
 	_checar(morte.imune_a("veneno") and not morte.imune_a("medo"), "Senhor da Peste: imune só a doença")
 	print("criação ok")
+
+
+## Atributos: cada build cai no próprio Sol, empates e status.
+func _testar_atributos() -> void:
+	for sol in Atributos.BUILD_SOL:
+		var at: Dictionary = Atributos.BUILD_SOL[sol]
+		_checar(Atributos.gastos(at) == Atributos.PONTOS, "build de %s não soma %d" % [sol, Atributos.PONTOS])
+		_checar(Atributos.sois_que_combinam(at) == [sol], "build de %s cai em %s" % [sol, Atributos.sois_que_combinam(at)])
+	var empate := Atributos.vazio()
+	empate["int"] = 6
+	empate["des"] = 6
+	var combina := Atributos.sois_que_combinam(empate)
+	_checar(combina.size() == 2 and "morte" in combina and "tempo" in combina, "Int 6 e Des 6 deveriam empatar: %s" % [combina])
+	var natureza := Atributos.vazio()
+	natureza["con"] = 7
+	natureza["sab"] = 2
+	_checar(Atributos.sois_que_combinam(natureza) == ["verde"], "Con alta e Sab baixa deveria dar Natureza")
+	natureza["sab"] = 5
+	_checar(Atributos.sois_que_combinam(natureza) == ["vida"], "Con e Sab altas deveriam dar Vida")
+	var h := Jogo.criar_heroi("A", "masculino", "medo")
+	_checar(h["hp"] == 45 + 4 * 5 and h["ataque"] == 4 + 7 and h["atributos"]["for"] == 7, "status do Medo errados: %s" % [h])
+	var c := Combatente.criar(Jogo.criar_heroi("B", "masculino", "alma"), true)
+	_checar(c.mult_magia() > 1.0, "Conexão 7 deveria fortalecer a magia")
+	print("atributos ok")
 
 
 func _testar_luz() -> void:

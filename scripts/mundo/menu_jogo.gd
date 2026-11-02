@@ -329,8 +329,12 @@ func _atualizar_magias() -> void:
 	var m := membro()
 	var c := Combatente.criar(m, true)
 	var t := "[color=#d9b34d][b]Ações[/b][/color]\n"
-	t += "• [b]Atacar[/b]: %d de dano (%s).\n" % [c.poder_golpe(), "com a arma" if c.tem_arma() else "golpe desarmado, 5 + força"]
-	t += "• [b]Bloquear[/b]: +%d de defesa e metade do dano até o próximo turno.\n\n" % Combatente.DEFESA_BLOQUEIO
+	var golpe := c.ataque_basico()
+	t += "• [b]Atacar[/b] (%s): %d de dano (%s).\n" % [golpe["nome"], roundi(c.poder_golpe() * float(golpe["mult"])),
+		"com a arma" if c.tem_arma() else "desarmado, 5 + força"]
+	t += "• [b]%s[/b]: +%d de defesa e metade do dano até o próximo turno.\n" % [
+		"Bloquear com escudo" if c.usa_escudo() else "Bloquear", c.defesa_bloqueio()]
+	t += "• [b]Falar[/b] e [b]Fugir[/b]: no menu Habilidade da batalha.\n\n"
 	var tecnicas := []
 	var magias := []
 	for hid in m["habilidades"]:
@@ -394,6 +398,15 @@ func _atualizar_personagem() -> void:
 	t += "Força: %d\nDano da arma: %d\nDano do ataque: %d\n" % [c.ataque, c.dano_arma, c.poder_golpe()]
 	t += "Defesa: %d%% (o dano recebido cai %d%%)\n" % [c.defesa, mini(c.defesa, Combatente.DEFESA_MAXIMA)]
 	t += "Agilidade: %d\n\n" % c.agilidade
+	var at: Dictionary = m.get("atributos", {})
+	if not at.is_empty():
+		t += "[color=#d9b34d]Atributos[/color]\n"
+		var partes := []
+		for a in Atributos.ORDEM:
+			partes.append("%s %d" % [Atributos.NOME[a], int(at.get(a, 0))])
+		t += ", ".join(partes) + "\n"
+		t += "Conexão com o Sol: magia a %d%%\n\n" % roundi(Atributos.mult_conexao(at) * 100)
+	t += "[color=#d9b34d]Estilo:[/color] %s\n\n" % Jogo.texto_estilo(m)
 	t += "Membros: %s\n" % c.descricao_membros()
 	if not c.vivo():
 		t += "[color=#c05050]Morto[/color]\n"
