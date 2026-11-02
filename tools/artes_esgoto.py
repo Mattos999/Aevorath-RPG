@@ -329,16 +329,23 @@ def saco():
 
 def fundo():
     img = Image.open(ASSETS / "batalha" / "fundo_prisao.png").convert("RGB")
-    img = ImageEnhance.Brightness(img).enhance(0.8)
-    camada = Image.new("RGB", img.size, (50, 70, 34))
-    img = Image.blend(img, camada, 0.25)
-    # canal de água no chão
+    img = ImageEnhance.Brightness(img).enhance(0.75)
+    camada = Image.new("RGB", img.size, (46, 72, 30))
+    img = Image.blend(img, camada, 0.38)
     d = ImageDraw.Draw(img, "RGBA")
     rnd = random.Random(2)
-    d.rectangle([0, 470, 960, 540], fill=(34, 46, 24, 230))
-    for _ in range(90):
-        x, y = rnd.randrange(960), rnd.randrange(474, 540)
-        d.line([(x, y), (x + rnd.randrange(10, 40), y)], fill=(80, 96, 52, 160))
+    # limo escorrendo das paredes
+    for _ in range(70):
+        x = rnd.randrange(960)
+        y = rnd.randrange(40, 200)
+        comp = rnd.randrange(20, 90)
+        d.line([(x, y), (x, y + comp)], fill=(70, 110, 40, rnd.randrange(60, 140)), width=rnd.choice((1, 2, 3)))
+    # canal de água no chão, onde a party pisa
+    d.rectangle([0, 292, 960, 540], fill=(30, 44, 22, 215))
+    for _ in range(260):
+        x, y = rnd.randrange(960), rnd.randrange(296, 540)
+        d.line([(x, y), (x + rnd.randrange(10, 50), y)], fill=(86, 108, 56, rnd.randrange(80, 170)))
+    d.line([(0, 292), (960, 292)], fill=(110, 130, 70, 200), width=2)
     img.save(ASSETS / "batalha" / "fundo_esgoto.png")
 
 
