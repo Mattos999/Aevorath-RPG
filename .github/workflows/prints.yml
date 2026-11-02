@@ -11,6 +11,8 @@ env:
 jobs:
   prints:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
@@ -37,6 +39,19 @@ jobs:
 
       - name: Tirar prints
         run: xvfb-run -a -s "-screen 0 1280x720x24" ./godot --rendering-driver opengl3 --resolution 960x540 res://tests/print_criacao.tscn
+
+      # Os prints também vão para tests/prints/ na própria branch, para quem
+      # não consegue baixar artefatos (o push do GITHUB_TOKEN não dispara outro run).
+      - name: Guardar prints na branch
+        run: |
+          mkdir -p tests/prints
+          touch tests/prints/.gdignore
+          cp ~/.local/share/godot/app_userdata/*/print_criacao_*.jpg tests/prints/
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add tests/prints
+          git commit -m "Prints da tela de criação (${GITHUB_SHA::7})" || exit 0
+          git push origin HEAD:${GITHUB_REF_NAME}
 
       - uses: actions/upload-artifact@v4
         with:
