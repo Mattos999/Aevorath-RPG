@@ -33,7 +33,9 @@ var botao_comecar: Button
 var nome_editado := false
 
 
-## Um sol desenhado: núcleo, brilho em camadas e raios que giram devagar.
+## Um sol desenhado com volume: esfera sombreada, brilho em camadas e uma
+## coroa de raios que gira inclinada (os raios de trás ficam atrás da esfera
+## e mais apagados). Animado, ele também flutua e balança devagar.
 class SolDesenho extends Control:
 	var nucleo := Color.WHITE
 	var brilho := Color.WHITE
@@ -48,36 +50,59 @@ class SolDesenho extends Control:
 			queue_redraw()
 
 	func _draw() -> void:
-		var c := size / 2
 		var r := minf(size.x, size.y) * 0.24
-		var pulso := 1.0 + 0.04 * sin(_t * 2.2)
+		var c := size / 2 + Vector2(0, sin(_t * 1.6) * r * 0.06)
+		var pulso := 1.0 + 0.03 * sin(_t * 2.2)
 		var forca := 1.0 if aceso else 0.35
 		# Brilho: círculos cada vez maiores e mais fracos.
 		for i in range(10, 0, -1):
 			var cor := brilho
 			cor.a = 0.05 * forca
 			draw_circle(c, r * (1.0 + i * 0.13) * pulso, cor)
-		# Raios alternando comprimento, girando.
+		# Coroa de raios em 3D: gira no próprio plano, que inclina e balança.
+		var giro := _t * 0.5
+		var inclinacao := 0.55 + 0.25 * sin(_t * 0.7)
+		var balanco := 0.35 * sin(_t * 0.45)
+		var atras := []
+		var frente := []
 		for i in raios:
-			var ang := TAU * i / raios + _t * 0.15
-			var comp := (1.85 if i % 2 == 0 else 1.5) * pulso
-			var largura := 0.16 if i % 2 == 0 else 0.11
-			var ponta := c + Vector2.from_angle(ang) * r * comp
-			var a := c + Vector2.from_angle(ang - largura) * r * 1.02
-			var b := c + Vector2.from_angle(ang + largura) * r * 1.02
-			var cor := brilho
-			cor.a = 0.85 * forca
-			draw_colored_polygon(PackedVector2Array([a, ponta, b]), cor)
-		# Núcleo com uma borda clara e um miolo mais vivo.
-		var borda := brilho
-		borda.a = forca
-		draw_circle(c, r * 1.06, borda)
-		var miolo := nucleo
-		miolo.a = forca
-		draw_circle(c, r, miolo)
-		var luz := nucleo.lightened(0.18)
-		luz.a = 0.6 * forca
-		draw_circle(c + Vector2(-r, -r) * 0.18, r * 0.55, luz)
+			var ang := TAU * i / raios + giro
+			var d := Vector3(cos(ang), sin(ang), 0.0)
+			d = d.rotated(Vector3.RIGHT, inclinacao).rotated(Vector3.UP, balanco)
+			var ray := {"d": d, "comp": (1.9 if i % 2 == 0 else 1.55) * pulso,
+				"largura": 0.2 if i % 2 == 0 else 0.14}
+			(frente if d.z > 0.0 else atras).append(ray)
+		for ray in atras:
+			_raio(c, r, ray, forca * 0.55)
+		_esfera(c, r, forca)
+		for ray in frente:
+			_raio(c, r, ray, forca)
+
+	## Raio como um triângulo saindo da superfície da esfera na direção d.
+	func _raio(c: Vector2, r: float, ray: Dictionary, forca: float) -> void:
+		var d: Vector3 = ray["d"]
+		var plano := Vector2(d.x, d.y)
+		var lado := Vector2(-d.y, d.x).normalized() * r * ray["largura"]
+		var base := c + plano * r * 0.98
+		var ponta := c + plano * r * ray["comp"]
+		var cor := brilho.darkened(0.25 * (1.0 - d.z) * 0.5)
+		cor.a = 0.9 * forca
+		draw_colored_polygon(PackedVector2Array([base - lado, ponta, base + lado]), cor)
+
+	## Esfera: círculos que encolhem em direção ao ponto de luz, do escuro ao claro.
+	func _esfera(c: Vector2, r: float, forca: float) -> void:
+		var luz := Vector2(-0.38, -0.42).rotated(0.25 * sin(_t * 0.6))
+		var escuro := nucleo.darkened(0.55)
+		var claro := nucleo.lightened(0.4)
+		var passos := 22
+		for k in passos:
+			var f := float(k) / passos
+			var cor := escuro.lerp(claro, pow(f, 1.4))
+			cor.a = forca
+			draw_circle(c + luz * r * f * 0.62, r * (1.0 - f * 0.92), cor)
+		var aro := brilho
+		aro.a = 0.55 * forca
+		draw_arc(c, r, 0.0, TAU, 64, aro, 2.0, true)
 
 
 func _ready() -> void:
@@ -356,7 +381,10 @@ func _atualizar() -> void:
 	for id in botoes_sol:
 		var b: Button = botoes_sol[id]
 		b.set_pressed_no_signal(id == sol)
-		(b.get_meta("icone") as SolDesenho).aceso = id == sol
+		var icone_sol: SolDesenho = b.get_meta("icone")
+		icone_sol.aceso = id == sol
+		icone_sol.animado = id == sol
+		icone_sol.queue_redraw()
 		(b.get_meta("nome") as Label).add_theme_color_override("font_color", COR_TEXTO if id == sol else COR_APAGADO)
 
 	nome_sol.text = Habilidades.NOME_SOL[sol]
