@@ -24,13 +24,13 @@ const SIGLA := {
 }
 
 const EFEITO := {
-	"con": "Vida (+4 HP por ponto).",
-	"for": "Dano dos golpes (+1 por ponto).",
-	"des": "Agilidade: age antes e esquiva mais.",
-	"int": "Dano das magias (+5% por ponto) e MP.",
-	"sab": "Cura das magias (+5% por ponto) e MP.",
-	"sor": "Chance de golpe crítico (+2% por ponto).",
-	"conx": "Ligação com os Sóis: força de todas as magias.",
+	"con": "+4 HP por ponto.",
+	"for": "+1 de dano nos golpes.",
+	"des": "Age antes e esquiva mais.",
+	"int": "Dano das magias +5%, MP.",
+	"sab": "Cura das magias +5%, MP.",
+	"sor": "Crítico +2% por ponto.",
+	"conx": "Força de todas as magias.",
 }
 
 const PONTOS := 20

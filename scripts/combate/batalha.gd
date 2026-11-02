@@ -122,6 +122,8 @@ func _montar_interface() -> void:
 
 	texto_luz = Label.new()
 	texto_luz.position = Vector2(10, 6)
+	texto_luz.size = Vector2(360, 0)
+	texto_luz.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	texto_luz.add_theme_font_size_override("font_size", 12)
 	texto_luz.add_theme_color_override("font_outline_color", Color.BLACK)
 	texto_luz.add_theme_constant_override("outline_size", 4)
@@ -172,6 +174,9 @@ void fragment() {
 """)
 	add_child(brilho_luz)
 	_visual_luz(false)
+	# Nome, barra e texto da luz ficam por cima da luz, sempre legíveis.
+	for no in [nome_inimigo, barra_inimigo, texto_luz]:
+		move_child(no, -1)
 
 	var painel_log := _painel(Vector2(300, 296), Vector2(360, 62), Color(0, 0, 0, 0.75))
 	add_child(painel_log)
@@ -569,7 +574,7 @@ func _escolher_habilidade(c: Combatente) -> Dictionary:
 	var bloqueio := "Bloquear com escudo" if c.usa_escudo() else "Bloquear"
 	var opcoes := [
 		{"texto": bloqueio, "valor": "defender",
-			"dica": "+%d de defesa e metade do dano até o próximo turno." % c.defesa_bloqueio()},
+			"dica": "+%d de defesa, metade do dano." % c.defesa_bloqueio()},
 		{"texto": "Falar", "valor": "falar", "dica": "Tentar conversar com %s." % inimigo.nome},
 		{"texto": "Fugir", "valor": "fugir", "dica": "Impossível sem pernas."},
 	]

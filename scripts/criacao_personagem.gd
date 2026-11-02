@@ -41,7 +41,6 @@ var lista_sol: VBoxContainer
 var linha_atributos: Label
 var painel_pontos: VBoxContainer
 var texto_pontos: Label
-var ensina: Label
 var linhas_atributo: Dictionary = {}
 var botoes_modo: Dictionary = {}
 var dica: Label
@@ -314,11 +313,6 @@ func _montar_detalhes() -> void:
 		linha.add_child(efeito)
 		painel_pontos.add_child(linha)
 		linhas_atributo[a] = {"valor": valor, "barra": barra, "menos": menos, "mais": mais, "nome": nome}
-	ensina = _texto("", 11, COR_APAGADO)
-	ensina.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	ensina.custom_minimum_size = Vector2(484, 0)
-	painel_pontos.add_child(_espaco(4))
-	painel_pontos.add_child(ensina)
 
 
 ## Fileira dos oito sóis: clicar ou andar com ←/→ troca o escolhido.
@@ -591,7 +585,16 @@ func _atualizar() -> void:
 		foco_sol.text = "Empate: %s. Clique no Sol que quer seguir." % ", ".join(nomes)
 
 	var st := Atributos.status(atributos)
-	linha_atributos.text = "%s     HP %d · MP %d" % [Atributos.texto_curto(atributos), st["hp"], st["mp"]]
+	if modo == "build":
+		linha_atributos.text = "%s     HP %d · MP %d" % [Atributos.texto_curto(atributos), st["hp"], st["mp"]]
+	elif tem_sol:
+		# Distribuindo, os números já estão nas linhas: aqui vai o que o Sol ensina.
+		var nomes := []
+		for hid in Habilidades.MAGIAS_POR_SOL[sol]:
+			nomes.append(Habilidades.DADOS[hid]["nome"] if Habilidades.DADOS.has(hid) else Habilidades.PLANEJADAS[hid][0])
+		linha_atributos.text = "Magias: %s.  Passiva: %s." % [", ".join(nomes), Habilidades.PASSIVAS[sol][0]]
+	else:
+		linha_atributos.text = ""
 	resumo_sol.visible = modo == "build"
 	resumo_sol.text = Habilidades.RESUMO_SOL.get(sol, "")
 	lista_sol.visible = modo == "build"
@@ -614,7 +617,8 @@ func _atualizar() -> void:
 
 func _atualizar_pontos() -> void:
 	var sobra := Atributos.PONTOS - Atributos.gastos(atributos)
-	texto_pontos.text = "Pontos: %d de %d    (máximo %d em cada)" % [sobra, Atributos.PONTOS, Atributos.MAXIMO]
+	var st := Atributos.status(atributos)
+	texto_pontos.text = "Pontos: %d de %d  (máx. %d)      HP %d · MP %d" % [sobra, Atributos.PONTOS, Atributos.MAXIMO, st["hp"], st["mp"]]
 	var pedidos: Array = Atributos.SOL_ATRIBUTOS.get(sol, [])
 	for a in Atributos.ORDEM:
 		var l: Dictionary = linhas_atributo[a]
@@ -632,13 +636,6 @@ func _atualizar_pontos() -> void:
 		for quadro in (l["barra"] as HBoxContainer).get_children():
 			(quadro as ColorRect).color = cheio if i < v else Color(1, 1, 1, 0.08)
 			i += 1
-	# Linha curta com o que o Sol ensina.
-	ensina.text = ""
-	if sol != "":
-		var nomes := []
-		for hid in Habilidades.MAGIAS_POR_SOL[sol]:
-			nomes.append(Habilidades.DADOS[hid]["nome"] if Habilidades.DADOS.has(hid) else Habilidades.PLANEJADAS[hid][0])
-		ensina.text = "Magias: %s.  Passiva: %s." % [", ".join(nomes), Habilidades.PASSIVAS[sol][0]]
 
 
 func _atualizar_lista() -> void:
