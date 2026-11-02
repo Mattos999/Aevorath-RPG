@@ -81,10 +81,13 @@ class SolDesenho extends Control:
 
 
 func _ready() -> void:
+	# O pai é um Node comum, então as âncoras não pegam a tela: usa o tamanho dela.
 	set_anchors_preset(Control.PRESET_FULL_RECT)
+	size = get_viewport_rect().size
 	var fundo := ColorRect.new()
 	fundo.color = Color(0.035, 0.025, 0.03)
 	fundo.set_anchors_preset(Control.PRESET_FULL_RECT)
+	fundo.size = size
 	add_child(fundo)
 
 	# Clarão da cor do Sol atrás do sol grande.
@@ -376,7 +379,7 @@ func _atualizar() -> void:
 	var tecnicas := []
 	for hid in c["habilidades"]:
 		tecnicas.append(Habilidades.DADOS[hid]["nome"])
-	var base := _texto("Todos começam com uma espada enferrujada, %s." % " e ".join(tecnicas), 11, Color(0.4, 0.37, 0.36))
+	var base := _texto("Todos começam com uma espada enferrujada, %s." % " e ".join(tecnicas), 11, Color(0.5, 0.46, 0.44))
 	lista_sol.add_child(_espaco(2))
 	lista_sol.add_child(base)
 
