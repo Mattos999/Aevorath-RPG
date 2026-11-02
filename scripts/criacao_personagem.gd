@@ -4,12 +4,17 @@ extends Control
 ## Sol que ele segue. Não há classes: o sexo escolhe a arte (retrato,
 ## caminhada e poses de costas) e o Sol, as magias e a passiva. Atributos e
 ## técnicas iniciais são iguais para todos (Jogo.HEROI_BASE).
-## Funciona com mouse ou teclado (setas/Tab para andar, Z/Enter para escolher).
+##
+## O Sol escolhido aparece grande, brilhando na cor dele, com o nome, o foco
+## e o que ensina ao lado. Embaixo fica a fileira dos oito sóis.
+## Teclado: ←/→ (ou A/D) troca o Sol, Z/Enter começa, Tab anda entre os campos.
 
 signal concluida(nome: String, sexo: String, sol: String)
 
 const COR_OURO := MenuJogo.COR_OURO
-const COR_APAGADO := MenuJogo.COR_APAGADO
+const COR_TEXTO := Color(0.86, 0.82, 0.76)
+const COR_APAGADO := Color(0.5, 0.46, 0.44)
+const COR_LINHA := Color(1, 1, 1, 0.08)
 
 var sexo := "masculino"
 var sol := "vida"
@@ -18,104 +23,82 @@ var campo_nome: LineEdit
 var botoes_sexo: Dictionary = {}
 var botoes_sol: Dictionary = {}
 var retrato: TextureRect
-var boneco: TextureRect
-var texto_sol: RichTextLabel
+var sol_grande: SolDesenho
+var halo: ColorRect
+var nome_sol: Label
+var foco_sol: Label
+var resumo_sol: Label
+var lista_sol: VBoxContainer
 var botao_comecar: Button
 var nome_editado := false
+
+
+## Um sol desenhado: núcleo, brilho em camadas e raios que giram devagar.
+class SolDesenho extends Control:
+	var nucleo := Color.WHITE
+	var brilho := Color.WHITE
+	var raios := 12
+	var animado := true
+	var aceso := true
+	var _t := 0.0
+
+	func _process(delta: float) -> void:
+		if animado:
+			_t += delta
+			queue_redraw()
+
+	func _draw() -> void:
+		var c := size / 2
+		var r := minf(size.x, size.y) * 0.24
+		var pulso := 1.0 + 0.04 * sin(_t * 2.2)
+		var forca := 1.0 if aceso else 0.35
+		# Brilho: círculos cada vez maiores e mais fracos.
+		for i in range(10, 0, -1):
+			var cor := brilho
+			cor.a = 0.05 * forca
+			draw_circle(c, r * (1.0 + i * 0.13) * pulso, cor)
+		# Raios alternando comprimento, girando.
+		for i in raios:
+			var ang := TAU * i / raios + _t * 0.15
+			var comp := (1.85 if i % 2 == 0 else 1.5) * pulso
+			var largura := 0.16 if i % 2 == 0 else 0.11
+			var ponta := c + Vector2.from_angle(ang) * r * comp
+			var a := c + Vector2.from_angle(ang - largura) * r * 1.02
+			var b := c + Vector2.from_angle(ang + largura) * r * 1.02
+			var cor := brilho
+			cor.a = 0.85 * forca
+			draw_colored_polygon(PackedVector2Array([a, ponta, b]), cor)
+		# Núcleo com uma borda clara e um miolo mais vivo.
+		var borda := brilho
+		borda.a = forca
+		draw_circle(c, r * 1.06, borda)
+		var miolo := nucleo
+		miolo.a = forca
+		draw_circle(c, r, miolo)
+		var luz := nucleo.lightened(0.18)
+		luz.a = 0.6 * forca
+		draw_circle(c + Vector2(-r, -r) * 0.18, r * 0.55, luz)
 
 
 func _ready() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	var fundo := ColorRect.new()
-	fundo.color = Color.BLACK
+	fundo.color = Color(0.035, 0.025, 0.03)
 	fundo.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(fundo)
 
-	var painel := PanelContainer.new()
-	painel.position = Vector2(30, 20)
-	painel.size = Vector2(900, 500)
-	painel.add_theme_stylebox_override("panel", MenuJogo._estilo(MenuJogo.COR_FUNDO, MenuJogo.COR_BORDA))
-	add_child(painel)
-	var raiz := VBoxContainer.new()
-	raiz.add_theme_constant_override("separation", 10)
-	painel.add_child(raiz)
+	# Clarão da cor do Sol atrás do sol grande.
+	halo = ColorRect.new()
+	halo.position = Vector2(0, 40)
+	halo.size = Vector2(480, 420)
+	halo.material = _material_halo()
+	add_child(halo)
 
-	var titulo := Label.new()
-	titulo.text = "Quem desperta na cela?"
-	titulo.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	titulo.add_theme_color_override("font_color", COR_OURO)
-	titulo.add_theme_font_size_override("font_size", 22)
-	raiz.add_child(titulo)
-
-	var corpo := HBoxContainer.new()
-	corpo.add_theme_constant_override("separation", 18)
-	corpo.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	raiz.add_child(corpo)
-
-	# Esquerda: retrato e boneco do mapa.
-	var esquerda := VBoxContainer.new()
-	esquerda.add_theme_constant_override("separation", 12)
-	corpo.add_child(esquerda)
-	retrato = TextureRect.new()
-	retrato.custom_minimum_size = Vector2(176, 176)
-	retrato.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	retrato.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	esquerda.add_child(retrato)
-	boneco = TextureRect.new()
-	boneco.custom_minimum_size = Vector2(192, 128)
-	boneco.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	boneco.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	boneco.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	esquerda.add_child(boneco)
-
-	# Direita: nome, sexo, Sol e descrição.
-	var direita := VBoxContainer.new()
-	direita.add_theme_constant_override("separation", 8)
-	direita.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	corpo.add_child(direita)
-
-	campo_nome = LineEdit.new()
-	campo_nome.max_length = 16
-	campo_nome.placeholder_text = "Digite o nome"
-	campo_nome.add_theme_font_size_override("font_size", 15)
-	campo_nome.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	campo_nome.add_theme_stylebox_override("normal", MenuJogo._estilo(Color(0.12, 0.08, 0.09), Color(0.3, 0.12, 0.12)))
-	campo_nome.add_theme_stylebox_override("focus", MenuJogo._estilo(Color(0.12, 0.08, 0.09), COR_OURO))
-	campo_nome.text_changed.connect(func(_t): nome_editado = true)
-	campo_nome.text_submitted.connect(func(_t): botoes_sexo[sexo].grab_focus())
-	_linha(direita, "Nome").add_child(campo_nome)
-
-	var linha_sexo := _linha(direita, "Sexo")
-	for id in Jogo.SEXOS:
-		var b := _opcao(Jogo.SEXOS[id]["nome"])
-		b.pressed.connect(_escolher_sexo.bind(id))
-		linha_sexo.add_child(b)
-		botoes_sexo[id] = b
-
-	var grade_sol := GridContainer.new()
-	grade_sol.columns = 4
-	_linha(direita, "Sol").add_child(grade_sol)
-	for id in Habilidades.SOIS_INICIAIS:
-		var b := _opcao(Habilidades.SOIS_INICIAIS[id])
-		b.pressed.connect(_escolher_sol.bind(id))
-		b.focus_entered.connect(_escolher_sol.bind(id))
-		grade_sol.add_child(b)
-		botoes_sol[id] = b
-
-	texto_sol = RichTextLabel.new()
-	texto_sol.bbcode_enabled = true
-	texto_sol.fit_content = true
-	texto_sol.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	texto_sol.add_theme_font_size_override("normal_font_size", 13)
-	texto_sol.add_theme_font_size_override("bold_font_size", 13)
-	direita.add_child(texto_sol)
-
-	botao_comecar = MenuJogo._botao("Começar")
-	botao_comecar.add_theme_font_size_override("font_size", 16)
-	botao_comecar.custom_minimum_size = Vector2(176, 40)
-	botao_comecar.size_flags_vertical = Control.SIZE_SHRINK_END | Control.SIZE_EXPAND
-	botao_comecar.pressed.connect(comecar)
-	esquerda.add_child(botao_comecar)
+	_montar_topo()
+	_montar_sol()
+	_montar_detalhes()
+	_montar_fileira()
+	_montar_rodape()
 
 	# Começa com as últimas escolhas (ao recomeçar depois de morrer).
 	var anterior: Dictionary = Jogo.criacao
@@ -127,35 +110,213 @@ func _ready() -> void:
 	campo_nome.grab_focus.call_deferred()
 
 
-## Uma linha do formulário: rótulo à esquerda e os controles à direita.
-func _linha(pai: Control, texto: String) -> HBoxContainer:
-	var linha := HBoxContainer.new()
-	var rotulo := _rotulo(texto)
-	rotulo.custom_minimum_size = Vector2(60, 0)
-	rotulo.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
-	linha.add_child(rotulo)
-	pai.add_child(linha)
-	return linha
+# ---------------------------------------------------------------- montagem
+
+## Topo: retrato pequeno, nome e sexo numa linha só.
+func _montar_topo() -> void:
+	var topo := HBoxContainer.new()
+	topo.position = Vector2(36, 22)
+	topo.size = Vector2(888, 56)
+	topo.add_theme_constant_override("separation", 14)
+	add_child(topo)
+
+	retrato = TextureRect.new()
+	retrato.custom_minimum_size = Vector2(56, 56)
+	retrato.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	retrato.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	topo.add_child(retrato)
+
+	var coluna := VBoxContainer.new()
+	coluna.add_theme_constant_override("separation", 2)
+	coluna.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	topo.add_child(coluna)
+	coluna.add_child(_texto("Quem desperta na cela?", 12, COR_APAGADO))
+	campo_nome = LineEdit.new()
+	campo_nome.max_length = 16
+	campo_nome.placeholder_text = "Digite o nome"
+	campo_nome.custom_minimum_size = Vector2(260, 0)
+	campo_nome.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	campo_nome.add_theme_font_size_override("font_size", 22)
+	campo_nome.add_theme_color_override("font_color", COR_TEXTO)
+	campo_nome.add_theme_color_override("caret_color", COR_OURO)
+	var linha := StyleBoxFlat.new()
+	linha.bg_color = Color.TRANSPARENT
+	linha.border_color = Color(1, 1, 1, 0.15)
+	linha.border_width_bottom = 1
+	linha.content_margin_bottom = 2
+	campo_nome.add_theme_stylebox_override("normal", linha)
+	var linha_foco := linha.duplicate()
+	linha_foco.border_color = COR_OURO
+	campo_nome.add_theme_stylebox_override("focus", linha_foco)
+	campo_nome.text_changed.connect(func(_t): nome_editado = true)
+	campo_nome.text_submitted.connect(func(_t): botoes_sol[sol].grab_focus())
+	coluna.add_child(campo_nome)
+
+	var sexos := HBoxContainer.new()
+	sexos.add_theme_constant_override("separation", 0)
+	sexos.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	topo.add_child(sexos)
+	for id in Jogo.SEXOS:
+		var b := _aba(Jogo.SEXOS[id]["nome"])
+		b.pressed.connect(_escolher_sexo.bind(id))
+		sexos.add_child(b)
+		botoes_sexo[id] = b
 
 
-func _rotulo(texto: String) -> Label:
+func _montar_sol() -> void:
+	sol_grande = SolDesenho.new()
+	sol_grande.position = Vector2(60, 110)
+	sol_grande.size = Vector2(340, 300)
+	sol_grande.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(sol_grande)
+
+
+## Direita: nome do Sol, foco, uma frase e o que ele ensina.
+func _montar_detalhes() -> void:
+	var caixa := VBoxContainer.new()
+	caixa.position = Vector2(440, 104)
+	caixa.size = Vector2(484, 300)
+	caixa.add_theme_constant_override("separation", 4)
+	add_child(caixa)
+
+	nome_sol = _texto("", 34, COR_TEXTO)
+	caixa.add_child(nome_sol)
+	foco_sol = _texto("", 13, COR_OURO)
+	caixa.add_child(foco_sol)
+	resumo_sol = _texto("", 14, COR_APAGADO)
+	resumo_sol.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	resumo_sol.custom_minimum_size = Vector2(484, 0)
+	caixa.add_child(resumo_sol)
+
+	var separador := ColorRect.new()
+	separador.color = COR_LINHA
+	separador.custom_minimum_size = Vector2(484, 1)
+	caixa.add_child(_espaco(8))
+	caixa.add_child(separador)
+	caixa.add_child(_espaco(6))
+
+	lista_sol = VBoxContainer.new()
+	lista_sol.add_theme_constant_override("separation", 9)
+	caixa.add_child(lista_sol)
+
+
+## Fileira dos oito sóis: clicar ou andar com ←/→ troca o escolhido.
+func _montar_fileira() -> void:
+	var fileira := HBoxContainer.new()
+	fileira.position = Vector2(36, 418)
+	fileira.size = Vector2(888, 60)
+	fileira.add_theme_constant_override("separation", 6)
+	fileira.alignment = BoxContainer.ALIGNMENT_CENTER
+	add_child(fileira)
+	var vazio := StyleBoxEmpty.new()
+	for id in Habilidades.SOIS_INICIAIS:
+		var b := Button.new()
+		b.custom_minimum_size = Vector2(100, 58)
+		b.toggle_mode = true
+		b.focus_mode = Control.FOCUS_ALL
+		for estado in ["normal", "hover", "pressed", "focus", "hover_pressed"]:
+			b.add_theme_stylebox_override(estado, vazio)
+		var icone := SolDesenho.new()
+		icone.set_anchors_preset(Control.PRESET_FULL_RECT)
+		icone.offset_bottom = -16
+		icone.raios = 8
+		icone.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var cores: Array = Habilidades.COR_SOL[id]
+		icone.nucleo = cores[0]
+		icone.brilho = cores[1]
+		b.add_child(icone)
+		var nome := _texto(Habilidades.SOIS_INICIAIS[id], 11, COR_APAGADO)
+		nome.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+		nome.offset_top = -16
+		nome.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		nome.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		b.add_child(nome)
+		b.set_meta("icone", icone)
+		b.set_meta("nome", nome)
+		b.pressed.connect(_escolher_sol.bind(id))
+		b.focus_entered.connect(_escolher_sol.bind(id))
+		fileira.add_child(b)
+		botoes_sol[id] = b
+
+
+func _montar_rodape() -> void:
+	var dica := _texto("←  →  trocar o Sol        Z / Enter  começar", 11, Color(0.4, 0.37, 0.36))
+	dica.position = Vector2(36, 500)
+	add_child(dica)
+
+	botao_comecar = Button.new()
+	botao_comecar.text = "Começar  ›"
+	botao_comecar.position = Vector2(774, 488)
+	botao_comecar.size = Vector2(150, 36)
+	botao_comecar.add_theme_font_size_override("font_size", 16)
+	botao_comecar.add_theme_color_override("font_color", COR_TEXTO)
+	botao_comecar.add_theme_color_override("font_hover_color", Color.WHITE)
+	botao_comecar.add_theme_color_override("font_focus_color", Color.WHITE)
+	for estado in ["normal", "hover", "pressed", "focus"]:
+		var e := StyleBoxFlat.new()
+		e.bg_color = Color(1, 1, 1, 0.04 if estado == "normal" else 0.1)
+		e.border_color = Color(1, 1, 1, 0.12) if estado == "normal" else COR_OURO
+		e.set_border_width_all(1)
+		e.set_corner_radius_all(3)
+		botao_comecar.add_theme_stylebox_override(estado, e)
+	botao_comecar.pressed.connect(comecar)
+	add_child(botao_comecar)
+
+
+# ---------------------------------------------------------------- peças
+
+func _texto(texto: String, tamanho: int, cor: Color) -> Label:
 	var l := Label.new()
 	l.text = texto
-	l.add_theme_color_override("font_color", COR_OURO)
-	l.add_theme_font_size_override("font_size", 14)
+	l.add_theme_font_size_override("font_size", tamanho)
+	l.add_theme_color_override("font_color", cor)
 	return l
 
 
-func _opcao(texto: String) -> Button:
-	var b: Button = MenuJogo._botao(texto)
+func _espaco(altura: int) -> Control:
+	var c := Control.new()
+	c.custom_minimum_size = Vector2(0, altura)
+	return c
+
+
+## Botão de aba (Masculino / Feminino): só sublinhado quando escolhido.
+func _aba(texto: String) -> Button:
+	var b := Button.new()
+	b.text = texto
 	b.toggle_mode = true
-	b.custom_minimum_size = Vector2(124, 0)
+	b.custom_minimum_size = Vector2(104, 34)
 	b.add_theme_font_size_override("font_size", 14)
-	var marcado := MenuJogo._estilo(Color(0.35, 0.1, 0.08), COR_OURO)
-	marcado.set_content_margin_all(5)
-	b.add_theme_stylebox_override("pressed", marcado)
+	b.add_theme_color_override("font_color", COR_APAGADO)
+	b.add_theme_color_override("font_hover_color", COR_TEXTO)
+	b.add_theme_color_override("font_pressed_color", COR_TEXTO)
+	b.add_theme_color_override("font_hover_pressed_color", COR_TEXTO)
+	b.add_theme_color_override("font_focus_color", COR_TEXTO)
+	for estado in ["normal", "hover", "focus", "pressed", "hover_pressed"]:
+		var e := StyleBoxFlat.new()
+		e.bg_color = Color.TRANSPARENT
+		e.border_color = COR_OURO if estado in ["pressed", "hover_pressed"] else Color(1, 1, 1, 0.1)
+		e.border_width_bottom = 2
+		b.add_theme_stylebox_override(estado, e)
 	return b
 
+
+## Brilho radial suave (some nas bordas) para o clarão atrás do sol.
+func _material_halo() -> ShaderMaterial:
+	var shader := Shader.new()
+	shader.code = """
+shader_type canvas_item;
+uniform vec4 cor : source_color = vec4(1.0);
+void fragment() {
+	float d = distance(UV, vec2(0.5, 0.45)) * 2.0;
+	COLOR = vec4(cor.rgb, cor.a * pow(clamp(1.0 - d, 0.0, 1.0), 2.2));
+}
+"""
+	var m := ShaderMaterial.new()
+	m.shader = shader
+	return m
+
+
+# ---------------------------------------------------------------- escolhas
 
 func _escolher_sexo(id: String) -> void:
 	# O nome padrão acompanha o sexo enquanto o jogador não digitou outro.
@@ -171,38 +332,71 @@ func _escolher_sol(id: String) -> void:
 	_atualizar()
 
 
+func _trocar_sol(passo: int) -> void:
+	var ids := Habilidades.SOIS_INICIAIS.keys()
+	var i := (ids.find(sol) + passo + ids.size()) % ids.size()
+	botoes_sol[ids[i]].grab_focus()
+	_escolher_sol(ids[i])
+
+
 func _atualizar() -> void:
 	for id in botoes_sexo:
 		botoes_sexo[id].set_pressed_no_signal(id == sexo)
-	for id in botoes_sol:
-		botoes_sol[id].set_pressed_no_signal(id == sol)
-	var s: Dictionary = Jogo.SEXOS[sexo]
-	retrato.texture = load(s["textura"])
-	var folha := AtlasTexture.new()
-	folha.atlas = load(s["folha_mapa"])
-	folha.region = Rect2(0, 0, folha.atlas.get_width() / 3.0, folha.atlas.get_height() / 4.0)
-	boneco.texture = folha
+	retrato.texture = load(Jogo.SEXOS[sexo]["textura"])
 
-	var t := "[color=#d9b34d][b]%s[/b][/color]\n" % Habilidades.NOME_SOL[sol]
+	var cores: Array = Habilidades.COR_SOL[sol]
+	sol_grande.nucleo = cores[0]
+	sol_grande.brilho = cores[1]
+	var cor_halo: Color = cores[1]
+	cor_halo.a = 0.28
+	(halo.material as ShaderMaterial).set_shader_parameter("cor", cor_halo)
+	for id in botoes_sol:
+		var b: Button = botoes_sol[id]
+		b.set_pressed_no_signal(id == sol)
+		(b.get_meta("icone") as SolDesenho).aceso = id == sol
+		(b.get_meta("nome") as Label).add_theme_color_override("font_color", COR_TEXTO if id == sol else COR_APAGADO)
+
+	nome_sol.text = Habilidades.NOME_SOL[sol]
+	nome_sol.add_theme_color_override("font_color", (cores[1] as Color).lerp(COR_TEXTO, 0.35))
+	foco_sol.text = "Foco: " + Habilidades.FOCO_SOL[sol]
+	resumo_sol.text = Habilidades.RESUMO_SOL[sol]
+
+	for filho in lista_sol.get_children():
+		filho.queue_free()
 	for hid in Habilidades.MAGIAS_POR_SOL[sol]:
 		if Habilidades.DADOS.has(hid):
-			t += _linha_habilidade(hid)
+			var h: Dictionary = Habilidades.DADOS[hid]
+			_item(h["nome"], "Magia · " + Habilidades.texto_custo(hid), h["descricao"])
 		else:
 			var p: Array = Habilidades.PLANEJADAS[hid]
-			t += "[color=#8c8080]• %s (em breve): %s[/color]\n" % [p[0], p[1]]
-	t += Habilidades.linha_passiva(sol)
+			_item(p[0], "Magia · em breve", p[1], true)
+	var passiva: Array = Habilidades.PASSIVAS[sol]
+	_item(passiva[0], "Passiva" if sol in Habilidades.PASSIVAS_ATIVAS else "Passiva · em breve", passiva[1])
 	var c: Dictionary = Jogo.HEROI_BASE
-	t += "\n[color=#8c8080]Todos começam com HP %d · MP %d · Força %d · Agilidade %d, uma espada enferrujada e as técnicas:[/color]\n" % [
-		c["hp"], c["mp"], c["ataque"], c["agilidade"]]
+	var tecnicas := []
 	for hid in c["habilidades"]:
-		t += _linha_habilidade(hid)
-	texto_sol.text = t
+		tecnicas.append(Habilidades.DADOS[hid]["nome"])
+	var base := _texto("Todos começam com uma espada enferrujada, %s." % " e ".join(tecnicas), 11, Color(0.4, 0.37, 0.36))
+	lista_sol.add_child(_espaco(2))
+	lista_sol.add_child(base)
 
 
-func _linha_habilidade(hid: String) -> String:
-	var h: Dictionary = Habilidades.DADOS[hid]
-	var tipo := "magia" if h.get("magia", false) else "técnica"
-	return "• [b]%s[/b] [color=#8c8080](%s, %s)[/color]: %s\n" % [h["nome"], tipo, Habilidades.texto_custo(hid), h["descricao"]]
+## Uma habilidade na lista: nome e tipo na mesma linha, descrição embaixo.
+func _item(nome: String, tipo: String, descricao: String, planejada := false) -> void:
+	var item := VBoxContainer.new()
+	item.add_theme_constant_override("separation", 0)
+	var linha := HBoxContainer.new()
+	linha.add_theme_constant_override("separation", 10)
+	linha.add_child(_texto(nome, 15, COR_APAGADO if planejada else COR_TEXTO))
+	var t := _texto(tipo, 11, Color(0.45, 0.42, 0.4))
+	t.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	linha.add_child(t)
+	item.add_child(linha)
+	var d := _texto(descricao, 12, COR_APAGADO)
+	d.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	d.custom_minimum_size = Vector2(484, 0)
+	item.add_child(d)
+	lista_sol.add_child(item)
 
 
 func comecar() -> void:
@@ -214,9 +408,19 @@ func comecar() -> void:
 
 
 func _unhandled_input(evento: InputEvent) -> void:
-	# Z (interagir) confirma quando o foco não está no campo de nome.
-	if evento.is_action_pressed("interagir") and not campo_nome.has_focus():
+	if campo_nome.has_focus():
+		return
+	if evento.is_action_pressed("mover_esquerda") or evento.is_action_pressed("ui_left"):
+		get_viewport().set_input_as_handled()
+		_trocar_sol(-1)
+	elif evento.is_action_pressed("mover_direita") or evento.is_action_pressed("ui_right"):
+		get_viewport().set_input_as_handled()
+		_trocar_sol(1)
+	elif evento.is_action_pressed("interagir"):
+		# Z/Enter: num botão de sexo, escolhe; no resto, começa.
+		get_viewport().set_input_as_handled()
 		var foco := get_viewport().gui_get_focus_owner()
-		if foco is Button:
-			get_viewport().set_input_as_handled()
+		if foco is Button and foco in botoes_sexo.values():
 			(foco as Button).pressed.emit()
+		else:
+			comecar()

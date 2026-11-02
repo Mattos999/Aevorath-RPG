@@ -17,7 +17,7 @@ class_name Habilidades
 
 const NOME_SOL := {
 	"vida": "Sol da Vida", "morte": "Sol da Morte", "alma": "Sol da Alma",
-	"tempo": "Sol do Tempo", "verde": "Sol Verde", "coracao": "Sol do Coração",
+	"tempo": "Sol do Tempo", "verde": "Sol da Natureza", "coracao": "Sol do Coração",
 	"esperanca": "Sol da Esperança", "medo": "Sol do Medo", "apagado": "Sol Apagado",
 }
 
@@ -25,7 +25,39 @@ const NOME_SOL := {
 ## no NG+). Nomes curtos para os botões da tela de criação.
 const SOIS_INICIAIS := {
 	"vida": "Vida", "morte": "Morte", "alma": "Alma", "tempo": "Tempo",
-	"verde": "Verde", "coracao": "Coração", "esperanca": "Esperança", "medo": "Medo",
+	"verde": "Natureza", "coracao": "Coração", "esperanca": "Esperança", "medo": "Medo",
+}
+
+## Cores de cada Sol na tela de criação: [núcleo, brilho].
+const COR_SOL := {
+	"vida": [Color(0.78, 0.16, 0.14), Color(1.0, 0.42, 0.32)],
+	"morte": [Color(0.03, 0.03, 0.04), Color(0.62, 0.62, 0.68)],
+	"alma": [Color(0.5, 0.78, 0.95), Color(0.66, 0.88, 1.0)],
+	"tempo": [Color(0.85, 0.62, 0.22), Color(1.0, 0.82, 0.45)],
+	"verde": [Color(0.22, 0.6, 0.2), Color(0.45, 0.88, 0.35)],
+	"coracao": [Color(0.86, 0.3, 0.52), Color(1.0, 0.52, 0.7)],
+	"esperanca": [Color(0.98, 0.93, 0.7), Color(1.0, 1.0, 0.86)],
+	"medo": [Color(0.24, 0.05, 0.3), Color(0.58, 0.22, 0.7)],
+}
+
+## Atributos que cada Sol pede (definidos pelo Carlos em 2026-11-02; os
+## atributos ainda não existem no jogo, por enquanto é só informativo).
+const FOCO_SOL := {
+	"vida": "Constituição e Sabedoria", "morte": "Inteligência", "alma": "Conexão",
+	"tempo": "Destreza", "verde": "Constituição", "coracao": "Sorte e Conexão",
+	"esperanca": "Força e Sorte", "medo": "Força",
+}
+
+## Uma frase sobre cada Sol, mostrada sob o nome na tela de criação.
+const RESUMO_SOL := {
+	"vida": "Cura, resistência e a teimosia de voltar de onde ninguém volta.",
+	"morte": "Doença, cadáveres e o fim de todas as coisas.",
+	"alma": "Espíritos, projeção e o que fica depois do corpo.",
+	"tempo": "Voltar atrás, ver o que já passou e apressar as horas.",
+	"verde": "A terra que cura e que prende. Energia mesmo longe do sol.",
+	"coracao": "Encantar, enganar e enxergar através da mentira.",
+	"esperanca": "Vontade que levanta os outros e segura a mente no lugar.",
+	"medo": "Terror, presença e a escuridão como aliada.",
 }
 
 ## Ordem dos Sóis no menu e o que cada um ensina (incluindo o que ainda não
@@ -91,7 +123,7 @@ const DADOS := {
 		"descricao": "Volta 1 turno no tempo: tudo fica como no começo da rodada.",
 		"efeito": "luz", "cor": Color(0.7, 0.75, 1.0),
 	},
-	# ------------------------------------------------------------ Sol Verde
+	# ------------------------------------------------------------ Sol da Natureza
 	"cura_natureza": {
 		"nome": "Cura da natureza", "custo": 6, "alvo": "proprio", "magia": true, "sol": "verde",
 		"descricao": "Usa a energia da natureza para se curar: 35% da vida.",

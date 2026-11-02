@@ -165,7 +165,7 @@ func _testar_criacao() -> void:
 	_checar(Jogo.party.size() == 1 and heroi["nome"] == "Lyra" and not heroi.has("classe"), "party errada: %s" % [heroi])
 	_checar(heroi["folha_mapa"].ends_with("protagonista2.png") and "corte_preciso" in heroi["habilidades"], "arte ou técnicas erradas")
 	_checar(heroi["sol"] == "verde" and "emaranhar" in heroi["habilidades"] and "cura_natureza" in heroi["habilidades"],
-		"o Sol Verde deveria dar Cura da natureza e Emaranhar")
+		"o Sol da Natureza deveria dar Cura da natureza e Emaranhar")
 	for hid in Jogo.HEROI_BASE["habilidades"]:
 		_checar(Habilidades.DADOS.has(hid), "técnica inicial %s não existe" % hid)
 	var m = load("res://scenes/mundo.tscn").instantiate()

@@ -1,0 +1,44 @@
+name: Prints da tela de criação
+
+on:
+  push:
+    branches: [claude/project-thread-i0ql67]
+  workflow_dispatch:
+
+env:
+  GODOT_VERSION: 4.7.1
+
+jobs:
+  prints:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Godot (do cache do exportar.yml, ou baixa)
+        id: cache-godot
+        uses: actions/cache@v4
+        with:
+          path: |
+            godot
+            ~/.local/share/godot/export_templates
+          key: godot-${{ env.GODOT_VERSION }}-windows
+
+      - name: Baixar Godot
+        if: steps.cache-godot.outputs.cache-hit != 'true'
+        run: |
+          curl -fsSL -o g.zip https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip
+          unzip -q g.zip && mv Godot_v${GODOT_VERSION}-stable_linux.x86_64 godot && rm g.zip
+
+      - name: Vídeo virtual
+        run: sudo apt-get update -q && sudo apt-get install -y -q xvfb libgl1-mesa-dri
+
+      - name: Importar recursos
+        run: ./godot --headless --import
+
+      - name: Tirar prints
+        run: xvfb-run -a -s "-screen 0 1280x720x24" ./godot --rendering-driver opengl3 --resolution 960x540 res://tests/print_criacao.tscn
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: prints-criacao
+          path: ~/.local/share/godot/app_userdata/*/print_criacao_*.jpg
