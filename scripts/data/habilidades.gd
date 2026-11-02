@@ -12,11 +12,20 @@ class_name Habilidades
 ## e pertencem a um Sol ("sol"). "estado" aplica um efeito que dura turnos
 ## (-1 = até o fim da batalha). "efeito" é um arquivo em assets/efeitos/ e
 ## "cor" tinge esse efeito.
+## Magia com "dano_magico" causa esse dano vezes a força da luz (com
+## "com_arma", soma o golpe da arma).
 
 const NOME_SOL := {
 	"vida": "Sol da Vida", "morte": "Sol da Morte", "alma": "Sol da Alma",
 	"tempo": "Sol do Tempo", "verde": "Sol Verde", "coracao": "Sol do Coração",
 	"esperanca": "Sol da Esperança", "medo": "Sol do Medo", "apagado": "Sol Apagado",
+}
+
+## Sóis que o jogador pode seguir ao criar o personagem (o Sol Apagado só
+## no NG+). Nomes curtos para os botões da tela de criação.
+const SOIS_INICIAIS := {
+	"vida": "Vida", "morte": "Morte", "alma": "Alma", "tempo": "Tempo",
+	"verde": "Verde", "coracao": "Coração", "esperanca": "Esperança", "medo": "Medo",
 }
 
 ## Ordem dos Sóis no menu e o que cada um ensina (incluindo o que ainda não
@@ -31,6 +40,9 @@ const MAGIAS_POR_SOL := {
 	"esperanca": ["grito_vontade", "restaurar_sanidade"],
 	"medo": ["aterrorizar", "presenca_ameacadora"],
 }
+
+## Passivas que já funcionam no jogo (as outras aparecem como "em breve").
+const PASSIVAS_ATIVAS := ["vida", "morte", "medo"]
 
 const PASSIVAS := {
 	"vida": ["Nunca desistir", "Ao chegar a 0 de vida, volta com 1. Uma vez por descanso."],
@@ -140,3 +152,16 @@ static func impedimento(hid: String, c: Combatente) -> String:
 	if c.mp < h["custo"]:
 		return "MP insuficiente."
 	return ""
+
+
+## Linha da passiva de um Sol para os menus (em cinza se ainda não funciona).
+static func linha_passiva(sol: String) -> String:
+	var p: Array = PASSIVAS[sol]
+	if sol in PASSIVAS_ATIVAS:
+		return "• [b]Passiva, %s[/b]: %s\n" % [p[0], p[1]]
+	return "[color=#8c8080]• Passiva, %s (em breve): %s[/color]\n" % [p[0], p[1]]
+
+
+## Custo para mostrar no menu: "4 MP".
+static func texto_custo(hid: String) -> String:
+	return "%d MP" % DADOS[hid]["custo"]

@@ -98,7 +98,7 @@ static func _estilo(cor: Color, borda: Color) -> StyleBoxFlat:
 	return estilo
 
 
-func _botao(texto: String) -> Button:
+static func _botao(texto: String) -> Button:
 	var botao := Button.new()
 	botao.text = texto
 	botao.add_theme_font_size_override("font_size", 13)
@@ -341,9 +341,7 @@ func _atualizar_magias() -> void:
 			t += _linha_habilidade(hid, c)
 		t += "\n"
 	var sol: String = m.get("sol", "")
-	if sol == "":
-		t += "[color=#8c8080]%s não segue nenhum Sol: não usa magia.[/color]\n" % m["nome"]
-	else:
+	if sol != "":
 		t += "[color=#d9b34d][b]%s[/b][/color]  [color=#8c8080](magia só sob o sol, a lua ou com Pedra Solar)[/color]\n" % Habilidades.NOME_SOL[sol]
 		for hid in Habilidades.MAGIAS_POR_SOL[sol]:
 			if hid in magias:
@@ -351,16 +349,17 @@ func _atualizar_magias() -> void:
 			elif Habilidades.PLANEJADAS.has(hid):
 				var p: Array = Habilidades.PLANEJADAS[hid]
 				t += "[color=#8c8080]• %s (em breve): %s[/color]\n" % [p[0], p[1]]
-		var passiva: Array = Habilidades.PASSIVAS[sol]
-		t += "[color=#8c8080]• Passiva, %s (em breve): %s[/color]\n" % [passiva[0], passiva[1]]
+		t += Habilidades.linha_passiva(sol)
+	else:
+		t += "[color=#8c8080]%s não segue nenhum Sol: não usa magia.[/color]\n" % m["nome"]
 	texto_magias.text = t
 
 
 func _linha_habilidade(hid: String, c: Combatente) -> String:
 	var h: Dictionary = Habilidades.DADOS[hid]
-	var linha := "• [b]%s[/b] (%d MP): %s" % [h["nome"], h["custo"], h["descricao"]]
+	var linha := "• [b]%s[/b] (%s): %s" % [h["nome"], Habilidades.texto_custo(hid), h["descricao"]]
 	var motivo := Habilidades.impedimento(hid, c)
-	if motivo != "" and motivo != "MP insuficiente.":
+	if motivo != "" and not motivo in ["MP insuficiente.", "HP insuficiente."]:
 		linha += " [color=#c05050](%s)[/color]" % motivo
 	return linha + "\n"
 
@@ -390,8 +389,7 @@ func _atualizar_personagem() -> void:
 	retrato.texture = load(m["textura"])
 	var sol: String = m.get("sol", "")
 	var t := "[color=#d9b34d][b]%s[/b][/color], %s\n" % [m["nome"], m["titulo"]]
-	# Não há classes: o Sol que o personagem segue define as magias e passivas.
-	t += "Sol: %s\n\n" % Habilidades.NOME_SOL.get(sol, "nenhum")
+	t += ("Segue o %s\n\n" % Habilidades.NOME_SOL[sol]) if sol != "" else "Não segue nenhum Sol\n\n"
 	t += "HP: %d / %d\nMP: %d / %d\n" % [c.hp, c.hp_max, c.mp, c.mp_max]
 	t += "Força: %d\nDano da arma: %d\nDano do ataque: %d\n" % [c.ataque, c.dano_arma, c.poder_golpe()]
 	t += "Defesa: %d%% (o dano recebido cai %d%%)\n" % [c.defesa, mini(c.defesa, Combatente.DEFESA_MAXIMA)]

@@ -13,7 +13,6 @@ const COMPORTAMENTO_PADRAO := {"comportamento": "perseguir", "alcance": ALCANCE_
 	"intervalo": INTERVALO_INIMIGO, "eixo": Vector2i.RIGHT, "distancia": 3}
 ## Conversas dos NPCs pintados com letra.
 const DIALOGO_ENCAPUZADO := "res://dialogos/encapuzado.dialogue"
-const DIALOGO_ISELDE := "res://dialogos/iselde.dialogue"
 
 const INIMIGO_POR_LETRA := {"C": "cruzado", "O": "oco", "F": "oca", "N": "sarnheim", "V": "paladino"}
 
@@ -104,10 +103,6 @@ func _carregar_mapa() -> void:
 						pedras_no_chao[pos] = pedra
 				"H":
 					_criar_npc("encapuzado", "res://assets/sprites/encapuzado.png", pos, load(DIALOGO_ENCAPUZADO))
-					c = "."
-				"I":
-					if not Jogo.eventos.has("iselde"):
-						_criar_npc("iselde", "res://assets/sprites/protagonista2.png", pos, load(DIALOGO_ISELDE))
 					c = "."
 				"D":
 					if Jogo.eventos.has("porta_%d_%d" % [x, y]):
@@ -339,9 +334,9 @@ static func _falas(lista: Array, nome: String, retrato: String) -> Array:
 	for texto: String in lista:
 		var pagina := {"texto": texto, "nome": nome, "retrato": retrato}
 		var dois_pontos := texto.find(": ")
-		if dois_pontos > 0 and Mapas.FALANTES.has(texto.left(dois_pontos)):
+		if dois_pontos > 0 and Mapas.retrato_de(texto.left(dois_pontos)) != "":
 			pagina["nome"] = texto.left(dois_pontos)
-			pagina["retrato"] = Mapas.FALANTES[pagina["nome"]]
+			pagina["retrato"] = Mapas.retrato_de(pagina["nome"])
 			pagina["texto"] = texto.substr(dois_pontos + 2)
 		paginas_.append(pagina)
 	return paginas_
@@ -528,17 +523,6 @@ func marcar(evento: String) -> void:
 	Jogo.eventos[evento] = true
 
 
-## Coloca alguém na party e tira o NPC do mapa. Ex.: $> recrutar("iselde")
-func recrutar(id: String) -> void:
-	Jogo.eventos[id] = true
-	Jogo.recrutar(id)
-	for pos in npcs.keys():
-		if npcs[pos]["id"] == id:
-			npcs[pos]["no"].queue_free()
-			npcs.erase(pos)
-	_atualizar_hud()
-
-
 func _iniciar_conversa(recurso: DialogueResource, cue: String) -> void:
 	conversa = recurso
 	bloqueado = true
@@ -561,7 +545,7 @@ func _ir_para_linha(id: String) -> void:
 		return
 	nome_dialogo.text = linha.character
 	nome_dialogo.visible = linha.character != ""
-	var retrato: String = Mapas.FALANTES.get(linha.character, "")
+	var retrato := Mapas.retrato_de(linha.character)
 	retrato_dialogo.texture = load(retrato) if retrato != "" else null
 	retrato_dialogo.visible = retrato != ""
 	texto_dialogo.text = linha.text + ("" if not linha.responses.is_empty() else "\n[Z]")

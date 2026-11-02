@@ -3,16 +3,20 @@ class_name Mapas
 ## editor, em scenes/mapas/ (veja scripts/mundo/mapa_cena.gd).
 
 const RETRATO_ENCAPUZADO := "res://assets/batalha/retrato_encapuzado.png"
-const RETRATO_ISELDE := "res://assets/batalha/retrato_protagonista2.png"
 
-## Quem pode falar num diálogo. Comece uma fala com "Nome: " para trocar quem
-## fala, por exemplo "Aren: Quem é você?". Sem nome, fala o dono da conversa.
+## Quem pode falar num diálogo, além do protagonista (que usa o nome que o
+## jogador escolheu: no .dialogue escreva {{Jogo.nome_heroi()}}: fala).
 const FALANTES := {
-	"Aren": "res://assets/batalha/retrato_protagonista.png",
-	"Iselde": RETRATO_ISELDE,
 	"???": RETRATO_ENCAPUZADO,
 	"Encapuzado": RETRATO_ENCAPUZADO,
 }
+
+
+## Retrato de quem fala ("" = sem retrato).
+static func retrato_de(nome: String) -> String:
+	if nome != "" and nome == Jogo.nome_heroi():
+		return Jogo.party[0]["textura"]
+	return FALANTES.get(nome, "")
 
 ## Falas do encapuzado na primeira conversa (ele entrega a chave e a Pedra Solar).
 const FALAS_ENCAPUZADO := [

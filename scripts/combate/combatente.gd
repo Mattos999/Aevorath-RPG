@@ -50,6 +50,7 @@ const DEFESA_MAXIMA := 80
 const NOME_ESTADO := {
 	"veneno": "Envenenado", "paralisia": "Paralisado", "medo": "Aterrorizado",
 	"encantado": "Encantado", "regeneracao": "Regenerando", "forca": "Ataque +",
+	"escudo": "Defesa +", "ofuscado": "Ofuscado",
 }
 
 var id: String
@@ -85,6 +86,12 @@ var defendendo := false
 var sangrando := false
 ## Cargas de Pedra Solar do inimigo (a party usa as pedras do Jogo).
 var cargas_solares := 0
+## Sol que o membro da party segue (dá a passiva; veja Habilidades.PASSIVAS).
+var sol := ""
+## Passiva do Sol da Vida já usada desde o último descanso.
+var nunca_desistir_usado := false
+## A passiva do Sol da Vida acabou de salvar este lutador (a batalha avisa).
+var resistiu := false
 
 
 static func criar(dados: Dictionary, jogador: bool) -> Combatente:
@@ -116,6 +123,8 @@ static func criar(dados: Dictionary, jogador: bool) -> Combatente:
 	c.regioes = dados.get("regioes", {})
 	c.sangrando = dados.get("sangrando", false)
 	c.cargas_solares = dados.get("cargas_solares", 0)
+	c.sol = dados.get("sol", "")
+	c.nunca_desistir_usado = dados.get("nunca_desistir_usado", false)
 	var hp_partes: Dictionary = dados.get("hp_partes", {})
 	var decepados: Array = dados.get("decepados", [])
 	for p in PARTES:
@@ -212,6 +221,8 @@ func receber_golpe(parte: String, dano_bruto: int, rng: RandomNumberGenerator, p
 		return resultado
 	resultado["acertou"] = true
 	var reducao := defesa + (DEFESA_BLOQUEIO if defendendo else 0)
+	if estados.has("escudo"):
+		reducao += estados["escudo"]["valor"]
 	var dano := maxi(1, roundi(dano_bruto * (1.0 - mini(reducao, DEFESA_MAXIMA) / 100.0)))
 	if defendendo:
 		dano = maxi(1, dano / 2)
@@ -226,6 +237,7 @@ func receber_golpe(parte: String, dano_bruto: int, rng: RandomNumberGenerator, p
 			resultado["decepou"] = true
 
 	hp = maxi(0, hp - int(dano * DANO_NO_CORPO[parte]))
+	nunca_desistir()
 	resultado["morreu"] = not vivo()
 	if resultado["morreu"]:
 		hp = 0
@@ -238,7 +250,24 @@ func aplicar_sangramento() -> int:
 		return 0
 	var dano := SANGRAMENTO_POR_MEMBRO * maxi(1, membros_decepados().size())
 	hp = maxi(0, hp - dano)
+	nunca_desistir()
 	return dano
+
+
+## Passiva do Sol da Vida (Nunca desistir): ao chegar a 0 de HP, volta com 1.
+## Uma vez por descanso, e não salva de ter a cabeça decepada.
+func nunca_desistir() -> void:
+	if sol != "vida" or nunca_desistir_usado or hp > 0 or decepado("cabeca"):
+		return
+	hp = 1
+	nunca_desistir_usado = true
+	resistiu = true
+
+
+## Passivas que impedem um estado: Senhor da Peste (Sol da Morte) contra
+## doença e Abraça a escuridão (Sol do Medo) contra o medo.
+func imune_a(estado: String) -> bool:
+	return (sol == "morte" and estado == "veneno") or (sol == "medo" and estado == "medo")
 
 
 func curar(valor: int) -> int:
@@ -290,4 +319,5 @@ func para_dados(base: Dictionary) -> Dictionary:
 	dados["mp_atual"] = mp
 	dados["decepados"] = membros_decepados()
 	dados["sangrando"] = sangrando
+	dados["nunca_desistir_usado"] = nunca_desistir_usado
 	return dados

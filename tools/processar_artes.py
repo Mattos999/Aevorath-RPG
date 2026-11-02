@@ -270,7 +270,25 @@ def folha_de_quadros(linhas, altura=Q - 4):
     return montar_folha(quadros, [[(r, c, False) for c in range(3)] for r in range(4)], altura)
 
 
+def protagonistas_chibi():
+    """Protagonistas no estilo chibi (folhas 3x4). É a versão em uso."""
+    frente = [(0, 0, False), (0, 1, False), (0, 2, False)]
+    # Protagonista: a última linha da folha veio de frente; as costas são derivadas.
+    img = abrir("protagonista_folha.jpg")
+    q = recortar_quadros(img, preencher_de_fora(fundo_xadrez_claro(np.array(img))), 4, 3)
+    folha = montar_folha(q, [frente, [(1, i, False) for i in range(3)], [(2, i, False) for i in range(3)], frente])
+    for i in range(3):
+        quadro = folha.crop((i * Q, 0, i * Q + Q, Q))
+        folha.paste(costas_de_frente(quadro), (i * Q, 3 * Q))
+    salvar(folha, "sprites/protagonista.png")
+
+    img = abrir("protagonista2_folha.jpg")
+    q = recortar_quadros(img, preencher_de_fora(fundo_xadrez_medio(np.array(img))), 4, 3)
+    salvar(montar_folha(q, [[(r, i, False) for i in range(3)] for r in range(4)]), "sprites/protagonista2.png")
+
+
 def protagonistas():
+    # Fora do jogo por enquanto (Carlos, 2026-10-30): voltou o chibi.
     # Protagonistas: caminhadas novas do Carlos (uma imagem por direção, com
     # 4 quadros lado a lado em fundo verde). A esquerda é o lado espelhado.
     # O Aren só tinha uma pose de frente; os passos de frente saem de passos_de_frente().
@@ -287,7 +305,7 @@ def protagonistas():
 def folhas_de_mapa():
     frente = [(0, 0, False), (0, 1, False), (0, 2, False)]
 
-    protagonistas()
+    protagonistas_chibi()
 
     # Sarnheim v2: frente, lado (olhando para a esquerda) e costas; a direita é espelhada.
     img = abrir("sarnheim_folha_v2.jpg")

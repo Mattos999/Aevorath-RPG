@@ -8,45 +8,36 @@ extends Node
 
 signal batalha_pedida(inimigo_id: String, id_no_mapa: String)
 
-## Nomes provisórios até o Carlos definir os nomes dos protagonistas.
-const PERSONAGENS := {
-	"aren": {
-		"id": "aren",
-		"nome": "Aren",
-		"titulo": "Prisioneiro",
-		"sol": "",
-		"hp": 65,
-		"mp": 10,
-		"ataque": 8,
-		"defesa": 0,
-		"agilidade": 9,
+## O jogador cria o protagonista no começo (tela de criação): nome, sexo e
+## o Sol que segue. Não há classes (Carlos, 2026-11-02): o sexo escolhe a
+## arte, o Sol as magias e a passiva, e o resto o jogador constrói jogando.
+const SEXOS := {
+	"masculino": {
+		"nome": "Masculino",
+		"nome_padrao": "Aren",
 		"textura": "res://assets/batalha/retrato_protagonista.png",
 		# Na batalha aparece de costas, em primeiro plano: <costas><pose>.png
 		"costas": "res://assets/batalha/costas/aren_",
 		"folha_mapa": "res://assets/sprites/protagonista.png",
-		"habilidades": ["corte_preciso", "golpe_destruidor"],
-		"equipamento": {"arma": "espada_enferrujada", "corpo": "panos_velhos", "pes": "calcados_velhos"},
-		"hp_partes": {"cabeca": 20, "braco_esq": 22, "braco_dir": 22, "pernas": 24},
 	},
-	"iselde": {
-		"id": "iselde",
-		"nome": "Iselde",
-		"titulo": "Marcada (Mydrani)",
-		# O Sol que ela segue define as magias (veja Habilidades.MAGIAS_POR_SOL).
-		"sol": "vida",
-		"hp": 50,
-		"mp": 20,
-		"ataque": 5,
-		"defesa": 0,
-		"agilidade": 12,
+	"feminino": {
+		"nome": "Feminino",
+		"nome_padrao": "Iselde",
 		"textura": "res://assets/batalha/retrato_protagonista2.png",
 		"costas": "res://assets/batalha/costas/iselde_",
 		"folha_mapa": "res://assets/sprites/protagonista2.png",
-		"habilidades": ["bencao_vaelora", "regeneracao"],
-		"equipamento": {"corpo": "panos_velhos", "pes": "calcados_velhos"},
-		"hp_partes": {"cabeca": 16, "braco_esq": 18, "braco_dir": 18, "pernas": 20},
 	},
 }
+
+## Atributos, técnicas e equipamento iniciais, iguais para todos.
+const HEROI_BASE := {
+	"hp": 65, "mp": 14, "ataque": 8, "defesa": 0, "agilidade": 10,
+	"habilidades": ["corte_preciso", "golpe_destruidor"],
+	"equipamento": {"arma": "espada_enferrujada", "corpo": "panos_velhos", "pes": "calcados_velhos"},
+}
+
+## Vida de cada membro em relação ao HP total.
+const PROPORCAO_PARTES := {"cabeca": 0.3, "braco_esq": 0.33, "braco_dir": 0.33, "pernas": 0.37}
 
 const CARGAS_PEDRA := 9
 const MINUTOS_POR_PASSO := 2
@@ -68,13 +59,42 @@ var fundo_batalha := "res://assets/batalha/fundo_prisao.png"
 var rng := RandomNumberGenerator.new()
 
 
+## Escolhas da tela de criação (usadas de novo ao recomeçar).
+var criacao := {"nome": "Aren", "sexo": "masculino", "sol": "vida"}
+
+
 func _ready() -> void:
 	rng.randomize()
 	novo_jogo()
 
 
-func novo_jogo() -> void:
-	party = [PERSONAGENS["aren"].duplicate(true)]
+## Monta o protagonista a partir das escolhas da tela de criação. O Sol
+## seguido soma as magias dele (as que já existem na batalha) às técnicas.
+static func criar_heroi(nome: String, sexo: String, sol := "") -> Dictionary:
+	var s: Dictionary = SEXOS[sexo]
+	var c: Dictionary = HEROI_BASE
+	var hp_partes := {}
+	for parte in PROPORCAO_PARTES:
+		hp_partes[parte] = roundi(c["hp"] * PROPORCAO_PARTES[parte])
+	var habilidades: Array = c["habilidades"].duplicate()
+	for hid in Habilidades.MAGIAS_POR_SOL.get(sol, []):
+		if Habilidades.DADOS.has(hid) and not hid in habilidades:
+			habilidades.append(hid)
+	return {
+		"id": "heroi", "nome": nome.strip_edges() if nome.strip_edges() != "" else s["nome_padrao"],
+		"sexo": sexo, "titulo": "Prisioneiro", "sol": sol,
+		"hp": c["hp"], "mp": c["mp"], "ataque": c["ataque"], "defesa": c["defesa"], "agilidade": c["agilidade"],
+		"textura": s["textura"], "costas": s["costas"], "folha_mapa": s["folha_mapa"],
+		"habilidades": habilidades, "equipamento": c["equipamento"].duplicate(),
+		"hp_partes": hp_partes,
+	}
+
+
+## Começa do zero. Sem argumentos, repete as últimas escolhas da criação.
+func novo_jogo(nome := "", sexo := "", sol := "") -> void:
+	if sexo != "":
+		criacao = {"nome": nome, "sexo": sexo, "sol": sol}
+	party = [criar_heroi(criacao["nome"], criacao["sexo"], criacao["sol"])]
 	itens = {"bandagem": 2}
 	# Provisório, para testar o inventário até os itens estarem no mapa.
 	inventario.assign(["espada_prata", "machado_guerra", "armadura_couro", "bota_couro", "colar_sol", "brinco_lebre"])
@@ -85,11 +105,15 @@ func novo_jogo() -> void:
 	luz_batalha = "escuro"
 
 
-func recrutar(id: String) -> void:
-	for membro in party:
-		if membro["id"] == id:
-			return
-	party.append(PERSONAGENS[id].duplicate(true))
+## Nome do protagonista (usado nos diálogos: {{Jogo.nome_heroi()}}).
+func nome_heroi() -> String:
+	return party[0]["nome"] if not party.is_empty() else criacao["nome"]
+
+
+## Escolhe a palavra pelo sexo do protagonista. Nos diálogos:
+## {{Jogo.genero("garoto", "garota")}}
+func genero(masculino: String, feminino: String) -> String:
+	return feminino if criacao["sexo"] == "feminino" else masculino
 
 
 func party_viva() -> bool:
@@ -99,8 +123,8 @@ func party_viva() -> bool:
 	return false
 
 
-## Altar dos Nove Sóis: restaura HP/MP e estanca sangramento dos vivos.
-## Membros perdidos não voltam.
+## Altar dos Nove Sóis: restaura HP/MP, estanca sangramento dos vivos e
+## recarrega a passiva Nunca desistir. Membros perdidos não voltam.
 func descansar() -> void:
 	for membro in party:
 		if membro.get("hp_atual", membro["hp"]) <= 0:
@@ -108,6 +132,7 @@ func descansar() -> void:
 		membro["hp_atual"] = membro["hp"]
 		membro["mp_atual"] = membro["mp"]
 		membro["sangrando"] = false
+		membro["nunca_desistir_usado"] = false
 
 
 func pedir_batalha(inimigo_id: String, id_no_mapa: String) -> void:
