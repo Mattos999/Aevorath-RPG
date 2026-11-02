@@ -9,7 +9,8 @@ extends Node
 signal batalha_pedida(inimigo_id: String, id_no_mapa: String)
 
 ## O jogador cria o protagonista no começo (tela de criação): nome, sexo e
-## classe. O sexo escolhe a arte; a classe, os atributos e as habilidades.
+## o Sol que segue. Não há classes (Carlos, 2026-11-02): o sexo escolhe a
+## arte, o Sol as magias e a passiva, e o resto o jogador constrói jogando.
 const SEXOS := {
 	"masculino": {
 		"nome": "Masculino",
@@ -28,37 +29,11 @@ const SEXOS := {
 	},
 }
 
-## Classes da nota Gameplay do Carlos (nomes ainda provisórios).
-## As habilidades estão em Habilidades.DADOS.
-const CLASSES := {
-	"guerreiro": {
-		"nome": "Guerreiro",
-		"descricao": "Luta com armas e espadas. As técnicas dele não dependem da luz.",
-		"hp": 70, "mp": 12, "ataque": 9, "defesa": 0, "agilidade": 9,
-		"habilidades": ["corte_preciso", "golpe_destruidor", "grito_guerra", "postura_ferro"],
-		"equipamento": {"arma": "espada_enferrujada", "corpo": "panos_velhos", "pes": "calcados_velhos"},
-	},
-	"mago": {
-		"nome": "Mago",
-		"descricao": "Conjura a luz do sol. Forte sob o céu, fraco no escuro sem Pedra Solar.",
-		"hp": 50, "mp": 24, "ataque": 5, "defesa": 0, "agilidade": 11,
-		"habilidades": ["lanca_solar", "clarao", "escudo_luz"],
-		"equipamento": {"corpo": "panos_velhos", "pes": "calcados_velhos"},
-	},
-	"mago_guerreiro": {
-		"nome": "Mago Guerreiro",
-		"descricao": "Usa a magia para reforçar a espada. Um pouco de cada lado.",
-		"hp": 60, "mp": 16, "ataque": 7, "defesa": 0, "agilidade": 10,
-		"habilidades": ["corte_preciso", "lamina_solar", "arma_encantada"],
-		"equipamento": {"arma": "espada_enferrujada", "corpo": "panos_velhos", "pes": "calcados_velhos"},
-	},
-	"bruxo": {
-		"nome": "Bruxo",
-		"descricao": "Magia proibida de carne e sangue: funciona no escuro, mas cobra a própria vida.",
-		"hp": 58, "mp": 12, "ataque": 6, "defesa": 0, "agilidade": 10,
-		"habilidades": ["sangria", "drenar_vida", "pacto_sangue"],
-		"equipamento": {"corpo": "panos_velhos", "pes": "calcados_velhos"},
-	},
+## Atributos, técnicas e equipamento iniciais, iguais para todos.
+const HEROI_BASE := {
+	"hp": 65, "mp": 14, "ataque": 8, "defesa": 0, "agilidade": 10,
+	"habilidades": ["corte_preciso", "golpe_destruidor"],
+	"equipamento": {"arma": "espada_enferrujada", "corpo": "panos_velhos", "pes": "calcados_velhos"},
 }
 
 ## Vida de cada membro em relação ao HP total.
@@ -85,7 +60,7 @@ var rng := RandomNumberGenerator.new()
 
 
 ## Escolhas da tela de criação (usadas de novo ao recomeçar).
-var criacao := {"nome": "Aren", "sexo": "masculino", "classe": "guerreiro", "sol": "vida"}
+var criacao := {"nome": "Aren", "sexo": "masculino", "sol": "vida"}
 
 
 func _ready() -> void:
@@ -94,10 +69,10 @@ func _ready() -> void:
 
 
 ## Monta o protagonista a partir das escolhas da tela de criação. O Sol
-## seguido soma as magias dele (as que já existem na batalha) às da classe.
-static func criar_heroi(nome: String, sexo: String, classe: String, sol := "") -> Dictionary:
+## seguido soma as magias dele (as que já existem na batalha) às técnicas.
+static func criar_heroi(nome: String, sexo: String, sol := "") -> Dictionary:
 	var s: Dictionary = SEXOS[sexo]
-	var c: Dictionary = CLASSES[classe]
+	var c: Dictionary = HEROI_BASE
 	var hp_partes := {}
 	for parte in PROPORCAO_PARTES:
 		hp_partes[parte] = roundi(c["hp"] * PROPORCAO_PARTES[parte])
@@ -107,7 +82,7 @@ static func criar_heroi(nome: String, sexo: String, classe: String, sol := "") -
 			habilidades.append(hid)
 	return {
 		"id": "heroi", "nome": nome.strip_edges() if nome.strip_edges() != "" else s["nome_padrao"],
-		"sexo": sexo, "titulo": "Prisioneiro", "classe": c["nome"], "id_classe": classe, "sol": sol,
+		"sexo": sexo, "titulo": "Prisioneiro", "sol": sol,
 		"hp": c["hp"], "mp": c["mp"], "ataque": c["ataque"], "defesa": c["defesa"], "agilidade": c["agilidade"],
 		"textura": s["textura"], "costas": s["costas"], "folha_mapa": s["folha_mapa"],
 		"habilidades": habilidades, "equipamento": c["equipamento"].duplicate(),
@@ -116,10 +91,10 @@ static func criar_heroi(nome: String, sexo: String, classe: String, sol := "") -
 
 
 ## Começa do zero. Sem argumentos, repete as últimas escolhas da criação.
-func novo_jogo(nome := "", sexo := "", classe := "", sol := "") -> void:
+func novo_jogo(nome := "", sexo := "", sol := "") -> void:
 	if sexo != "":
-		criacao = {"nome": nome, "sexo": sexo, "classe": classe, "sol": sol}
-	party = [criar_heroi(criacao["nome"], criacao["sexo"], criacao["classe"], criacao["sol"])]
+		criacao = {"nome": nome, "sexo": sexo, "sol": sol}
+	party = [criar_heroi(criacao["nome"], criacao["sexo"], criacao["sol"])]
 	itens = {"bandagem": 2}
 	# Provisório, para testar o inventário até os itens estarem no mapa.
 	inventario.assign(["espada_prata", "machado_guerra", "armadura_couro", "bota_couro", "colar_sol", "brinco_lebre"])

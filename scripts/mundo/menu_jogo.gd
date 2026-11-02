@@ -340,14 +340,6 @@ func _atualizar_magias() -> void:
 		for hid in tecnicas:
 			t += _linha_habilidade(hid, c)
 		t += "\n"
-	var de_classe := magias.filter(func(hid): return Habilidades.DADOS[hid].get("sol", "") == "")
-	if not de_classe.is_empty():
-		var sangue: bool = Habilidades.DADOS[de_classe[0]].get("sangue", false)
-		t += "[color=#d9b34d][b]Magias de %s[/b][/color]  [color=#8c8080](%s)[/color]\n" % [m.get("classe", "classe"),
-			"magia de sangue: funciona no escuro" if sangue else "só sob o sol, a lua ou com Pedra Solar"]
-		for hid in de_classe:
-			t += _linha_habilidade(hid, c)
-		t += "\n"
 	var sol: String = m.get("sol", "")
 	if sol != "":
 		t += "[color=#d9b34d][b]%s[/b][/color]  [color=#8c8080](magia só sob o sol, a lua ou com Pedra Solar)[/color]\n" % Habilidades.NOME_SOL[sol]
@@ -358,8 +350,8 @@ func _atualizar_magias() -> void:
 				var p: Array = Habilidades.PLANEJADAS[hid]
 				t += "[color=#8c8080]• %s (em breve): %s[/color]\n" % [p[0], p[1]]
 		t += Habilidades.linha_passiva(sol)
-	elif de_classe.is_empty():
-		t += "[color=#8c8080]%s não usa magia.[/color]\n" % m["nome"]
+	else:
+		t += "[color=#8c8080]%s não segue nenhum Sol: não usa magia.[/color]\n" % m["nome"]
 	texto_magias.text = t
 
 
@@ -397,7 +389,7 @@ func _atualizar_personagem() -> void:
 	retrato.texture = load(m["textura"])
 	var sol: String = m.get("sol", "")
 	var t := "[color=#d9b34d][b]%s[/b][/color], %s\n" % [m["nome"], m["titulo"]]
-	t += "Classe: %s    Sol: %s\n\n" % [m.get("classe", "—"), Habilidades.NOME_SOL.get(sol, "nenhum")]
+	t += ("Segue o %s\n\n" % Habilidades.NOME_SOL[sol]) if sol != "" else "Não segue nenhum Sol\n\n"
 	t += "HP: %d / %d\nMP: %d / %d\n" % [c.hp, c.hp_max, c.mp, c.mp_max]
 	t += "Força: %d\nDano da arma: %d\nDano do ataque: %d\n" % [c.ataque, c.dano_arma, c.poder_golpe()]
 	t += "Defesa: %d%% (o dano recebido cai %d%%)\n" % [c.defesa, mini(c.defesa, Combatente.DEFESA_MAXIMA)]

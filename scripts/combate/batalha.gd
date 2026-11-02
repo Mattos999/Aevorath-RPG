@@ -429,7 +429,7 @@ func _dica_ataque(c: Combatente) -> String:
 
 
 ## Magia funciona aqui para `c`? Sob o sol/lua, com Pedra Solar, ou uma vez
-## por batalha com o Colar do Sol. (Magia de sangue não depende da luz.)
+## por batalha com o Colar do Sol.
 func _pode_magia(c: Combatente) -> bool:
 	return Jogo.forca_magia(luz) > 0.0 or (c.tem_efeito("magia_no_escuro") and not c.colar_usado)
 
@@ -443,8 +443,6 @@ func _escolher_habilidade(c: Combatente) -> Dictionary:
 		var texto_dica: String = h["descricao"]
 		if motivo != "":
 			pass
-		elif magia and h.get("sangue", false):
-			texto_dica += " Magia de sangue: funciona no escuro."
 		elif magia and not _pode_magia(c):
 			motivo = "Sem luz, a magia não responde. Procure um feixe de sol ou uma Pedra Solar."
 		elif magia and Jogo.forca_magia(luz) <= 0.0:
@@ -643,7 +641,7 @@ func _executar(c: Combatente, acao: Dictionary) -> void:
 func _usar_habilidade(c: Combatente, acao: Dictionary) -> void:
 	var h: Dictionary = Habilidades.DADOS[acao["id"]]
 	var forca := 1.0
-	if h.get("magia", false) and not h.get("sangue", false):
+	if h.get("magia", false):
 		forca = Jogo.forca_magia(luz)
 		if forca <= 0.0:
 			c.colar_usado = true
@@ -665,11 +663,7 @@ func _usar_habilidade(c: Combatente, acao: Dictionary) -> void:
 		retrocedeu = true
 		return
 	c.mp -= h["custo"]
-	if h.get("custo_hp", 0) > 0:
-		c.hp = maxi(1, c.hp - h["custo_hp"])
-		_registrar("%s usa %s, pagando %d HP em sangue!" % [c.nome, h["nome"], h["custo_hp"]])
-	else:
-		_registrar("%s usa %s!" % [c.nome, h["nome"]])
+	_registrar("%s usa %s!" % [c.nome, h["nome"]])
 	_pose(c, "magia" if h.get("magia", false) else "soco", 1.0)
 	await _pausa(0.5)
 	var efeito: String = h.get("efeito", "")
@@ -684,14 +678,7 @@ func _usar_habilidade(c: Combatente, acao: Dictionary) -> void:
 					dano += _dano_base(c, 1.0, h.get("base", 0), true)
 			else:
 				dano = _dano_base(c, 1.0, h.get("base", 0), h.get("com_arma", false))
-			var r: Dictionary = await _golpear(inimigo, acao["parte"], dano, h.get("precisao", 1.0),
-				h.get("ignora_esquiva", false), efeito, cor)
-			if r["acertou"] and inimigo.vivo() and h.get("sangrar", false) and not inimigo.sangrando:
-				inimigo.sangrando = true
-				_registrar("%s começa a sangrar." % inimigo.nome)
-			if r["acertou"] and h.has("roubo_vida"):
-				var curado := c.curar(maxi(1, roundi(r["dano"] * h["roubo_vida"] / 100.0)))
-				_registrar("%s bebe %d HP." % [c.nome, curado])
+			await _golpear(inimigo, acao["parte"], dano, h.get("precisao", 1.0), h.get("ignora_esquiva", false), efeito, cor)
 			return
 		"inimigo_corpo":
 			alvos = [inimigo]
@@ -705,10 +692,6 @@ func _usar_habilidade(c: Combatente, acao: Dictionary) -> void:
 					alvos.append(membro)
 	for alvo in alvos:
 		_efeito(efeito, _pos_alvo(alvo, "torso"), 1.0, 1.0, cor)
-		if h.has("ganho_mp"):
-			var antes := alvo.mp
-			alvo.mp = mini(alvo.mp_max, alvo.mp + h["ganho_mp"])
-			_registrar("%s recupera %d MP." % [alvo.nome, alvo.mp - antes])
 		if h.has("cura_pct"):
 			var curado := alvo.curar(maxi(1, roundi(alvo.hp_max * h["cura_pct"] / 100.0 * forca)))
 			_registrar("%s recupera %d HP." % [alvo.nome, curado])

@@ -19,9 +19,9 @@ Controles:
 
 ## O que já existe
 
-- **Criação de personagem** no começo: nome, sexo (muda a arte) e classe
-  (Guerreiro, Mago, Mago Guerreiro ou Bruxo, cada uma com as suas técnicas e
-  magias). Só o personagem criado aparece no jogo.
+- **Criação de personagem** no começo: nome, sexo (muda a arte) e o Sol que
+  segue (dá as magias e a passiva). Não há classes: todos começam com os
+  mesmos atributos e técnicas. Só o personagem criado aparece no jogo.
 - **Mapa explorável** em grid de 64x64: a Prisão da Igreja do Décimo Dia.
   O jogo começa numa cela. O encapuzado de olhos vermelhos entrega a chave das
   celas e uma Pedra Solar.
@@ -40,8 +40,6 @@ Controles:
   - Pernas decepadas: sem esquiva, age por último e não consegue fugir.
   - Membro decepado causa sangramento até usar bandagem ou Sigilo de Vida.
   - Efeitos de corte, impacto, bloqueio, fogo, luz e raio (arte do Carlos).
-- **Magia de sangue** (Bruxo): funciona no escuro sem Pedra Solar, mas
-  algumas magias custam HP em vez de MP.
 - **Dano e membros perdidos** continuam depois da batalha.
   O altar cura HP/MP, mas o que foi perdido não volta.
 - **Inimigos**: Soldado de Sarnheim, Paladino do Décimo Dia (lança raios; no
