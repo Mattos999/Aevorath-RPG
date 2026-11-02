@@ -19,4 +19,11 @@ func _ready() -> void:
 		for i in range(0, b64.length(), 2000):
 			print(b64.substr(i, 2000))
 		print("PRINT_FIM")
+	# Quadros do sol se mexendo (para montar um GIF fora do Godot).
+	tela._escolher_sol("vida")
+	for q in 24:
+		for i in 5:
+			await get_tree().process_frame
+		var img := get_viewport().get_texture().get_image()
+		img.save_jpg("user://print_criacao_anim_%02d.jpg" % q, 0.85)
 	get_tree().quit()
