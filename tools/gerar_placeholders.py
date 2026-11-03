@@ -2,6 +2,9 @@
 
 Uso: python3 tools/gerar_placeholders.py
 Requer Pillow. Substitua os PNGs por arte final mantendo nomes e tamanhos.
+
+Atenção: este script sobrescreve PNGs que hoje vêm da arte do Carlos. Depois
+de rodá-lo, rode também tools/processar_artes.py.
 """
 import random
 from pathlib import Path

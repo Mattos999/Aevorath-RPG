@@ -2,13 +2,53 @@ extends Control
 ## Batalha por turnos com mira em membros.
 ## A ordem de ação é por agilidade. Em cada turno de um membro da party o
 ## jogador escolhe a ação; ao atacar, escolhe qual membro do inimigo mirar.
+##
+## Magia segue a regra da luz (Jogo.forca_magia): sob o sol ou a lua funciona;
+## no escuro gasta uma carga de Pedra Solar. O inimigo carrega as próprias cargas.
+##
+## Luz da batalha (A = sol, B = lua, C = escuro): começa com a luz do lugar do
+## mapa e aparece na cena (sol ilumina, lua azula, escuro apaga). Habilidades
+## com "muda_luz" trocam a luz por alguns turnos (rodadas) e depois ela volta
+## à do mapa. No escuro todo mundo erra mais (PRECISAO_ESCURO).
+##
+## Menu: Atacar (golpe básico da arma), Habilidade (Bloquear, Falar, Fugir e
+## técnicas aprendidas), Magia e Item. Menus com muitas opções mostram 5 por
+## página e um botão "Mais".
+##
+## Sanidade (party): ataques de horror tiram sanidade; em 0 o membro
+## enlouquece e pode perder o turno (Perseverança, do Sol da Esperança, segura).
 
 signal terminou(resultado: String)  # "vitoria", "derrota" ou "fuga"
 signal _escolha(valor)
 
 const POS_INIMIGO := Vector2(384, 38)
+## Party de costas em primeiro plano, lado a lado (o menu de combate fica por
+## cima deles). O 1º fica à esquerda olhando para a direita; o 2º à direita,
+## virado para o inimigo no meio.
+const POS_COSTAS := [Vector2(10, 150), Vector2(646, 150)]
+const ESCALA_COSTAS := 0.95
+## Onde fica cada parte na figura de costas (fração do tamanho da textura).
+const PARTES_COSTAS := {"cabeca": Vector2(0.5, 0.1), "torso": Vector2(0.5, 0.3),
+	"braco_esq": Vector2(0.8, 0.3), "braco_dir": Vector2(0.2, 0.3), "pernas": Vector2(0.5, 0.62)}
 const PAUSA := 0.8
+## Opções por página no menu de combate (o resto vai para "Mais").
+const OPCOES_POR_PAGINA := 5
+## Chance de perder o turno com a sanidade em 0.
+const CHANCE_LOUCURA := 0.5
 const CHANCE_FUGA := 0.45
+## Raio: folha horizontal com 8 quadros de 220x100.
+const QUADROS_RAIO := 8
+## Ponto da mão do raio do paladino na textura de batalha.
+const MAO_RAIO := Vector2(163, 100)
+const NOME_LUZ := {"sol": "Sob o sol", "lua": "Sob a lua", "escuro": "No escuro"}
+## No escuro, a chance de acerto de todos é multiplicada por isto.
+const PRECISAO_ESCURO := 0.75
+## Visual de cada luz: [tinta multiplicada na cena, brilho somado, força do brilho].
+const VISUAL_LUZ := {
+	"sol": [Color(1.0, 0.96, 0.88), Color(1.0, 0.8, 0.45), 0.22],
+	"lua": [Color(0.55, 0.62, 0.85), Color(0.6, 0.7, 1.0), 0.08],
+	"escuro": [Color(0.3, 0.27, 0.33), Color(0, 0, 0), 0.0],
+}
 
 ## Peso de cada parte quando o inimigo escolhe onde bater.
 const PESO_MIRA_INIMIGO := {"cabeca": 12, "torso": 40, "braco_esq": 16, "braco_dir": 16, "pernas": 16}
@@ -20,6 +60,9 @@ var rng: RandomNumberGenerator
 var ativo: Combatente
 var destaque := ""  # parte do inimigo destacada na mira
 var acabou := false
+## Foto de todos no começo da rodada (para Retroceder).
+var foto_rodada: Array = []
+var retrocedeu := false
 
 var sprite_inimigo: TextureRect
 var overlay: Control
@@ -29,11 +72,27 @@ var texto_log: Label
 var linhas_log: Array[String] = []
 var menu: VBoxContainer
 var dica: Label
+var texto_luz: Label
+var luz := "escuro"
+## Luz do lugar no mapa (a batalha volta a ela quando um efeito acaba).
+var luz_mapa := "escuro"
+## Rodadas que faltam para a luz trocada voltar à do mapa (0 = é a do mapa).
+var luz_turnos := 0
+var tinta_luz: ColorRect
+var brilho_luz: ColorRect
 var cartoes: Array[Dictionary] = []
+var _opcoes_menu: Array = []
+var _pagina_menu := 0
+## Membro -> TextureRect da figura de costas (só quem tem arte de costas).
+var figuras: Dictionary = {}
+## Membro -> número da última pose temporária (para não voltar cedo demais).
+var pose_temporaria: Dictionary = {}
 
 
 func _ready() -> void:
 	rng = Jogo.rng
+	luz = Jogo.luz_batalha
+	luz_mapa = luz
 	inimigo = Combatente.criar(Inimigos.DADOS[inimigo_id], false)
 	for dados in Jogo.party:
 		party.append(Combatente.criar(dados, true))
@@ -47,7 +106,7 @@ func _ready() -> void:
 func _montar_interface() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	var fundo := TextureRect.new()
-	fundo.texture = load("res://assets/batalha/fundo_catedral.png")
+	fundo.texture = load(Jogo.fundo_batalha)
 	fundo.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(fundo)
 
@@ -71,14 +130,72 @@ func _montar_interface() -> void:
 	barra_inimigo.size = Vector2(192, 10)
 	add_child(barra_inimigo)
 
-	var painel_log := _painel(Vector2(10, 298), Vector2(940, 60), Color(0, 0, 0, 0.7))
+	texto_luz = Label.new()
+	texto_luz.position = Vector2(10, 6)
+	texto_luz.size = Vector2(360, 0)
+	texto_luz.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	texto_luz.add_theme_font_size_override("font_size", 12)
+	texto_luz.add_theme_color_override("font_outline_color", Color.BLACK)
+	texto_luz.add_theme_constant_override("outline_size", 4)
+	add_child(texto_luz)
+
+	for c in party:
+		if c.costas != "":
+			var figura := TextureRect.new()
+			figura.texture = load(c.costas + "parado.png")
+			var lugar := mini(figuras.size(), POS_COSTAS.size() - 1)
+			figura.position = POS_COSTAS[lugar]
+			figura.flip_h = lugar == 1
+			figura.scale = Vector2.ONE * ESCALA_COSTAS
+			figura.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			figuras[c] = figura
+
+	for c in figuras:
+		add_child(figuras[c])
+
+	# Luz da cena: tinta multiplicada (com vinheta) e um brilho somado vindo de cima.
+	tinta_luz = ColorRect.new()
+	tinta_luz.set_anchors_preset(Control.PRESET_FULL_RECT)
+	tinta_luz.size = Vector2(960, 540)
+	tinta_luz.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	tinta_luz.material = _shader_luz("""
+shader_type canvas_item;
+render_mode blend_mul;
+uniform vec4 cor : source_color = vec4(1.0);
+void fragment() {
+	float d = distance(UV, vec2(0.5, 0.4));
+	COLOR = vec4(mix(cor.rgb, cor.rgb * 0.45, smoothstep(0.35, 0.85, d)), 1.0);
+}
+""")
+	add_child(tinta_luz)
+	brilho_luz = ColorRect.new()
+	brilho_luz.set_anchors_preset(Control.PRESET_FULL_RECT)
+	brilho_luz.size = Vector2(960, 540)
+	brilho_luz.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	brilho_luz.material = _shader_luz("""
+shader_type canvas_item;
+render_mode blend_add;
+uniform vec4 cor : source_color = vec4(1.0);
+uniform float forca = 0.0;
+void fragment() {
+	float raio = smoothstep(0.9, 0.0, distance(UV, vec2(0.3, -0.1)));
+	COLOR = vec4(cor.rgb * raio * forca, 1.0);
+}
+""")
+	add_child(brilho_luz)
+	_visual_luz(false)
+	# Nome, barra e texto da luz ficam por cima da luz, sempre legíveis.
+	for no in [nome_inimigo, barra_inimigo, texto_luz]:
+		move_child(no, -1)
+
+	var painel_log := _painel(Vector2(300, 296), Vector2(360, 62), Color(0, 0, 0, 0.75))
 	add_child(painel_log)
 	texto_log = Label.new()
 	texto_log.add_theme_font_size_override("font_size", 13)
 	texto_log.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	painel_log.add_child(texto_log)
 
-	add_child(_painel(Vector2(0, 364), Vector2(960, 176), Color(0.05, 0.03, 0.04, 0.95)))
+	add_child(_painel(Vector2(0, 364), Vector2(960, 176), Color(0.05, 0.03, 0.04, 0.88)))
 
 	dica = Label.new()
 	dica.position = Vector2(14, 370)
@@ -95,7 +212,7 @@ func _montar_interface() -> void:
 	add_child(menu)
 
 	for i in party.size():
-		_criar_cartao(party[i], Vector2(230 + i * 365, 374))
+		_criar_cartao(party[i], Vector2(230 + i * 365, 372))
 
 
 func _painel(pos: Vector2, tamanho: Vector2, cor: Color) -> PanelContainer:
@@ -144,34 +261,91 @@ func _barra(cor: Color) -> ProgressBar:
 	return barra
 
 
+func _shader_luz(codigo: String) -> ShaderMaterial:
+	var shader := Shader.new()
+	shader.code = codigo
+	var m := ShaderMaterial.new()
+	m.shader = shader
+	return m
+
+
+## Ajusta a cena para a luz atual (com `animado`, faz a transição devagar).
+func _visual_luz(animado := true) -> void:
+	var v: Array = VISUAL_LUZ[luz]
+	var m_tinta := tinta_luz.material as ShaderMaterial
+	var m_brilho := brilho_luz.material as ShaderMaterial
+	if not animado:
+		m_tinta.set_shader_parameter("cor", v[0])
+		m_brilho.set_shader_parameter("cor", v[1])
+		m_brilho.set_shader_parameter("forca", v[2])
+		return
+	var tween := create_tween().set_parallel()
+	tween.tween_method(func(c): m_tinta.set_shader_parameter("cor", c),
+		m_tinta.get_shader_parameter("cor"), v[0], 0.8)
+	tween.tween_method(func(c): m_brilho.set_shader_parameter("cor", c),
+		m_brilho.get_shader_parameter("cor"), v[1], 0.8)
+	tween.tween_method(func(f): m_brilho.set_shader_parameter("forca", f),
+		m_brilho.get_shader_parameter("forca"), v[2], 0.8)
+
+
+## Troca a luz da batalha por `turnos` rodadas (depois volta à do mapa).
+func _mudar_luz(nova: String, turnos: int) -> void:
+	if nova == luz:
+		luz_turnos = maxi(luz_turnos, turnos)
+		return
+	luz = nova
+	luz_turnos = turnos if nova != luz_mapa else 0
+	_visual_luz()
+	match nova:
+		"escuro": _registrar("Tudo escurece. Os golpes vão errar mais.")
+		"sol": _registrar("Um clarão de sol enche o lugar!")
+		"lua": _registrar("Uma luz fria de lua toma o lugar.")
+
+
+## Começo de rodada: a luz trocada perde um turno e pode voltar à do mapa.
+func _passar_turno_luz() -> void:
+	if luz_turnos <= 0:
+		return
+	luz_turnos -= 1
+	if luz_turnos == 0 and luz != luz_mapa:
+		luz = luz_mapa
+		_visual_luz()
+		_registrar("A luz volta ao que era: %s." % NOME_LUZ[luz].to_lower())
+		await _pausa(0.6)
+
+
+func _precisao_luz(precisao: float) -> float:
+	return precisao * (PRECISAO_ESCURO if luz == "escuro" else 1.0)
+
+
 func _criar_cartao(c: Combatente, pos: Vector2) -> void:
-	var painel := _painel(pos, Vector2(355, 140), Color(0.1, 0.07, 0.08))
+	var painel := _painel(pos, Vector2(355, 160), Color(0.1, 0.07, 0.08))
 	add_child(painel)
-	var raiz := Control.new()
-	painel.add_child(raiz)
+	var info := VBoxContainer.new()
+	info.add_theme_constant_override("separation", 3)
+	painel.add_child(info)
+	var topo := HBoxContainer.new()
+	info.add_child(topo)
 	var retrato := TextureRect.new()
 	retrato.texture = load(c.textura)
-	raiz.add_child(retrato)
-	var info := VBoxContainer.new()
-	info.position = Vector2(136, 0)
-	info.custom_minimum_size = Vector2(200, 0)
-	info.add_theme_constant_override("separation", 3)
-	raiz.add_child(info)
+	retrato.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	retrato.custom_minimum_size = Vector2(40, 40)
+	topo.add_child(retrato)
 	var nome := Label.new()
-	info.add_child(nome)
+	topo.add_child(nome)
 	var barra_hp := _barra(Color(0.65, 0.12, 0.12))
-	barra_hp.custom_minimum_size = Vector2(200, 10)
+	barra_hp.custom_minimum_size = Vector2(335, 10)
 	info.add_child(barra_hp)
 	var texto_hp := Label.new()
 	texto_hp.add_theme_font_size_override("font_size", 12)
 	info.add_child(texto_hp)
 	var barra_mp := _barra(Color(0.2, 0.45, 0.75))
-	barra_mp.custom_minimum_size = Vector2(200, 8)
+	barra_mp.custom_minimum_size = Vector2(335, 8)
 	info.add_child(barra_mp)
 	var estado := Label.new()
 	estado.add_theme_font_size_override("font_size", 11)
 	estado.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	estado.custom_minimum_size = Vector2(200, 0)
+	estado.custom_minimum_size = Vector2(335, 0)
 	info.add_child(estado)
 	cartoes.append({"painel": painel, "retrato": retrato, "nome": nome, "hp": barra_hp,
 		"texto_hp": texto_hp, "mp": barra_mp, "estado": estado})
@@ -179,6 +353,17 @@ func _criar_cartao(c: Combatente, pos: Vector2) -> void:
 
 func _atualizar_tudo() -> void:
 	nome_inimigo.text = inimigo.nome
+	if not inimigo.estados.is_empty():
+		nome_inimigo.text += "  [%s]" % inimigo.descricao_estados()
+	var forca := Jogo.forca_magia(luz)
+	var texto := "%s · %s%s · magia %d%%" % [Jogo.texto_relogio(), NOME_LUZ[luz],
+		(" (%d turnos)" % luz_turnos) if luz_turnos > 0 else "", roundi(forca * 100)]
+	if luz == "escuro":
+		texto += " · acerto -%d%%" % roundi((1.0 - PRECISAO_ESCURO) * 100)
+	if luz == "escuro":
+		texto += (" · Pedra Solar: %d cargas" % Jogo.cargas_solares()) if Jogo.tem_pedra_solar() else " · sem Pedra Solar"
+	texto_luz.text = texto
+	texto_luz.add_theme_color_override("font_color", Color(1, 0.85, 0.4) if forca > 0 else Color(0.6, 0.55, 0.55))
 	barra_inimigo.max_value = inimigo.hp_max
 	barra_inimigo.value = inimigo.hp
 	overlay.queue_redraw()
@@ -191,13 +376,23 @@ func _atualizar_tudo() -> void:
 		cartao["mp"].max_value = maxi(1, c.mp_max)
 		cartao["mp"].value = c.mp
 		cartao["texto_hp"].text = "HP %d/%d   MP %d/%d" % [c.hp, c.hp_max, c.mp, c.mp_max]
+		if c.sanidade_max > 0:
+			cartao["texto_hp"].text += "   Sanidade %d" % c.sanidade
 		var estados := [c.descricao_membros()]
 		if c.sangrando:
 			estados.append("Sangrando")
 		if c.defendendo:
-			estados.append("Defendendo")
+			estados.append("Bloqueando")
+		if not c.estados.is_empty():
+			estados.append(c.descricao_estados())
 		cartao["estado"].text = "MORTO" if not c.vivo() else " · ".join(estados)
 		cartao["retrato"].modulate = Color(0.35, 0.1, 0.1) if not c.vivo() else Color.WHITE
+		if c in figuras:
+			figuras[c].modulate = Color(0.35, 0.1, 0.1) if not c.vivo() else Color.WHITE
+			# Quem não está agindo fica um pouco mais escuro.
+			figuras[c].self_modulate = Color.WHITE if c == ativo or ativo == null or not ativo.eh_jogador else Color(0.7, 0.7, 0.7)
+			if not pose_temporaria.has(c):
+				figuras[c].texture = load(c.costas + ("guarda" if c.defendendo else "parado") + ".png")
 		var estilo: StyleBoxFlat = cartao["painel"].get_theme_stylebox("panel")
 		estilo.border_color = Color(0.85, 0.7, 0.3) if c == ativo else Color(0.4, 0.1, 0.1)
 
@@ -224,6 +419,21 @@ func _pausa(segundos := PAUSA) -> void:
 	await get_tree().create_timer(segundos).timeout
 
 
+## Troca a pose de costas do membro; com `duracao`, volta à pose normal depois.
+func _pose(c: Combatente, nome: String, duracao := 0.0) -> void:
+	if not c in figuras:
+		return
+	figuras[c].texture = load(c.costas + nome + ".png")
+	if duracao <= 0.0:
+		return
+	var numero: int = pose_temporaria.get(c, 0) + 1
+	pose_temporaria[c] = numero
+	await get_tree().create_timer(duracao).timeout
+	if pose_temporaria.get(c, 0) == numero:
+		pose_temporaria.erase(c)
+		_atualizar_tudo()
+
+
 func _piscar(no: CanvasItem) -> void:
 	var tween := create_tween()
 	tween.tween_property(no, "modulate", Color(1, 0.3, 0.3), 0.08)
@@ -235,11 +445,31 @@ func _piscar(no: CanvasItem) -> void:
 ## Mostra opções [{texto, valor, dica?, desabilitado?, parte?}] e espera a escolha.
 ## Com `pode_voltar`, adiciona "Voltar", que devolve null.
 func _menu(opcoes: Array, pode_voltar := false) -> Variant:
-	for filho in menu.get_children():
-		filho.queue_free()
-	var botoes: Array[Button] = []
 	if pode_voltar:
 		opcoes = opcoes + [{"texto": "Voltar", "valor": null, "dica": ""}]
+	_opcoes_menu = opcoes
+	_pagina_menu = 0
+	_desenhar_menu()
+	var valor = await _escolha
+	for filho in menu.get_children():
+		filho.queue_free()
+	dica.text = ""
+	destaque = ""
+	overlay.queue_redraw()
+	return valor
+
+
+## Desenha a página atual do menu (5 opções e "Mais" quando não cabem todas).
+func _desenhar_menu() -> void:
+	for filho in menu.get_children():
+		filho.queue_free()
+	var opcoes := _opcoes_menu
+	var paginas := 1
+	if opcoes.size() > OPCOES_POR_PAGINA + 1:
+		paginas = ceili(float(opcoes.size()) / OPCOES_POR_PAGINA)
+		var inicio := _pagina_menu * OPCOES_POR_PAGINA
+		opcoes = opcoes.slice(inicio, inicio + OPCOES_POR_PAGINA)
+	var botoes: Array[Button] = []
 	for opcao in opcoes:
 		var botao := Button.new()
 		botao.text = opcao["texto"]
@@ -256,17 +486,22 @@ func _menu(opcoes: Array, pode_voltar := false) -> Variant:
 			botao.mouse_entered.connect(botao.grab_focus)
 		menu.add_child(botao)
 		botoes.append(botao)
+	if paginas > 1:
+		var mais := Button.new()
+		mais.text = "Mais  (%d/%d) ›" % [_pagina_menu + 1, paginas]
+		mais.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		mais.add_theme_font_size_override("font_size", 12)
+		_estilizar_botao(mais)
+		mais.pressed.connect(func():
+			_pagina_menu = (_pagina_menu + 1) % paginas
+			_desenhar_menu())
+		mais.focus_entered.connect(func(): dica.text = "Mais opções.")
+		menu.add_child(mais)
+		botoes.append(mais)
 	for botao in botoes:
 		if not botao.disabled:
 			botao.grab_focus.call_deferred()
 			break
-	var valor = await _escolha
-	for filho in menu.get_children():
-		filho.queue_free()
-	dica.text = ""
-	destaque = ""
-	overlay.queue_redraw()
-	return valor
 
 
 func _input(evento: InputEvent) -> void:
@@ -284,7 +519,7 @@ func _input(evento: InputEvent) -> void:
 func _menu_mira(atacante: Combatente, precisao := 1.0, ignora_esquiva := false) -> Variant:
 	var opcoes := []
 	for parte in inimigo.partes_intactas():
-		var chance := 0.98 if ignora_esquiva else inimigo.chance_de_ser_acertado(parte, precisao)
+		var chance := 0.98 if ignora_esquiva else inimigo.chance_de_ser_acertado(parte, _precisao_luz(precisao))
 		opcoes.append({
 			"texto": "%s  (%d%%)" % [Combatente.NOME_PARTE[parte], roundi(chance * 100)],
 			"valor": parte,
@@ -314,44 +549,136 @@ func _menu_aliado() -> Variant:
 
 func _escolher_acao(c: Combatente) -> Dictionary:
 	while true:
+		var golpe := c.ataque_basico()
 		var principal = await _menu([
-			{"texto": "Atacar", "valor": "atacar", "dica": "Golpe com %s." % ("a arma" if c.pode_atacar_com_arma() else "os pés")},
-			{"texto": "Habilidade", "valor": "habilidade", "dica": "Magias e técnicas."},
-			{"texto": "Item", "valor": "item", "dica": "Bandagens: %d" % Jogo.itens.get("bandagem", 0)},
-			{"texto": "Defender", "valor": "defender", "dica": "Metade do dano até o próximo turno."},
-			{"texto": "Fugir", "valor": "fugir", "dica": "Impossível sem pernas."},
+			{"texto": "Atacar", "valor": "atacar", "dica": _dica_ataque(c)},
+			{"texto": "Habilidade", "valor": "habilidade", "dica": "Bloquear, falar, fugir e técnicas."},
+			{"texto": "Magia", "valor": "magia", "dica": "Magias do seu Sol. Precisam de luz.",
+				"desabilitado": _magias(c).is_empty()},
+			{"texto": "Item", "valor": "item", "dica": _dica_itens(),
+				"desabilitado": Itens.consumiveis().is_empty()},
 		])
 		match principal:
 			"atacar":
-				var parte = await _menu_mira(c)
+				var parte = await _menu_mira(c, golpe["precisao"])
 				if parte != null:
 					return {"tipo": "atacar", "parte": parte}
 			"habilidade":
 				var acao := await _escolher_habilidade(c)
 				if not acao.is_empty():
 					return acao
+			"magia":
+				var acao := await _escolher_magia(c)
+				if not acao.is_empty():
+					return acao
 			"item":
-				if Jogo.itens.get("bandagem", 0) <= 0:
-					continue
-				var alvo = await _menu_aliado()
-				if alvo != null:
-					return {"tipo": "item", "item": "bandagem", "alvo": alvo}
-			"defender":
-				return {"tipo": "defender"}
-			"fugir":
-				return {"tipo": "fugir"}
+				var acao := await _escolher_item()
+				if not acao.is_empty():
+					return acao
 	return {}
 
 
-func _escolher_habilidade(c: Combatente) -> Dictionary:
+func _dica_itens() -> String:
+	var partes := []
+	for id in Itens.consumiveis():
+		partes.append("%s x%d" % [Itens.DADOS[id]["nome"], Jogo.itens[id]])
+	return ", ".join(partes) if not partes.is_empty() else "Sem itens."
+
+
+func _escolher_item() -> Dictionary:
 	var opcoes := []
-	for hid in c.habilidades:
+	for id in Itens.consumiveis():
+		var d: Dictionary = Itens.DADOS[id]
+		opcoes.append({"texto": "%s x%d" % [d["nome"], Jogo.itens[id]], "valor": id, "dica": d["descricao"]})
+	var id = await _menu(opcoes, true)
+	if id == null:
+		return {}
+	if Itens.DADOS[id]["uso"] == "pedra":
+		return {"tipo": "item", "item": id, "alvo": null}
+	var alvo = await _menu_aliado()
+	if alvo == null:
+		return {}
+	return {"tipo": "item", "item": id, "alvo": alvo}
+
+
+func _dica_ataque(c: Combatente) -> String:
+	var golpe := c.ataque_basico()
+	var texto := "%s: " % golpe["nome"]
+	match golpe["nome"]:
+		"Soco": texto += "golpe de mão livre."
+		"Chute": texto += "sem braços, só resta chutar."
+		"Golpe pesado": texto += "arma de duas mãos, mais forte e menos preciso."
+		_: texto += "golpe com a arma."
+	if c.tem_efeito("ataque_extra") and c.tem_arma() and c.pode_atacar_com_arma():
+		texto += " Brinco da Lebre: ataca duas vezes."
+	return texto
+
+
+## Magia funciona aqui para `c`? Sob o sol/lua, com Pedra Solar, ou uma vez
+## por batalha com o Colar do Sol.
+func _pode_magia(c: Combatente) -> bool:
+	return Jogo.forca_magia(luz) > 0.0 or (c.tem_efeito("magia_no_escuro") and not c.colar_usado)
+
+
+func inimigo_chefe() -> bool:
+	return Inimigos.DADOS[inimigo_id].get("chefe", false)
+
+
+func _tecnicas(c: Combatente) -> Array:
+	return c.habilidades.filter(func(hid): return not Habilidades.DADOS[hid].get("magia", false))
+
+
+func _magias(c: Combatente) -> Array:
+	return c.habilidades.filter(func(hid): return Habilidades.DADOS[hid].get("magia", false))
+
+
+## Habilidade: Bloquear, Falar e Fugir (todos têm) e as técnicas aprendidas.
+func _escolher_habilidade(c: Combatente) -> Dictionary:
+	var bloqueio := "Bloquear com escudo" if c.usa_escudo() else "Bloquear"
+	var opcoes := [
+		{"texto": bloqueio, "valor": "defender",
+			"dica": "+%d de defesa, metade do dano." % c.defesa_bloqueio()},
+		{"texto": "Falar", "valor": "falar", "dica": "Tentar conversar com %s." % inimigo.nome},
+		{"texto": "Fugir", "valor": "fugir", "desabilitado": inimigo_chefe(),
+			"dica": "Não há como fugir dele." if inimigo_chefe() else "Impossível sem pernas."},
+	]
+	for hid in _tecnicas(c):
 		var h: Dictionary = Habilidades.DADOS[hid]
-		opcoes.append({"texto": "%s (%d MP)" % [h["nome"], h["custo"]], "valor": hid,
-			"desabilitado": c.mp < h["custo"], "dica": h["descricao"]})
+		var motivo := Habilidades.impedimento(hid, c)
+		opcoes.append({"texto": "%s (%s)" % [h["nome"], Habilidades.texto_custo(hid)], "valor": hid,
+			"desabilitado": motivo != "", "dica": motivo if motivo != "" else h["descricao"]})
+	var escolha = await _menu(opcoes, true)
+	match escolha:
+		null:
+			return {}
+		"defender", "falar", "fugir":
+			return {"tipo": escolha}
+	return await _alvo_da_habilidade(c, escolha)
+
+
+func _escolher_magia(c: Combatente) -> Dictionary:
+	var opcoes := []
+	for hid in _magias(c):
+		var h: Dictionary = Habilidades.DADOS[hid]
+		var motivo := Habilidades.impedimento(hid, c)
+		var texto_dica: String = h["descricao"]
+		if motivo != "":
+			pass
+		elif not _pode_magia(c):
+			motivo = "Sem luz, a magia não responde. Procure um feixe de sol ou uma Pedra Solar."
+		elif Jogo.forca_magia(luz) <= 0.0:
+			texto_dica += " Usa o Colar do Sol (uma vez por batalha)."
+		elif luz == "escuro":
+			texto_dica += " Gasta 1 carga da Pedra Solar."
+		opcoes.append({"texto": "%s (%s)" % [h["nome"], Habilidades.texto_custo(hid)], "valor": hid,
+			"desabilitado": motivo != "", "dica": motivo if motivo != "" else texto_dica})
 	var hid = await _menu(opcoes, true)
 	if hid == null:
 		return {}
+	return await _alvo_da_habilidade(c, hid)
+
+
+func _alvo_da_habilidade(c: Combatente, hid: String) -> Dictionary:
 	var h: Dictionary = Habilidades.DADOS[hid]
 	match h["alvo"]:
 		"inimigo":
@@ -380,6 +707,11 @@ func _rodar_batalha() -> void:
 		ordem.append(inimigo)
 		ordem.shuffle()
 		ordem.sort_custom(func(a, b): return a.agilidade_efetiva() > b.agilidade_efetiva())
+		await _passar_turno_luz()
+		foto_rodada = [inimigo.foto()]
+		for c in party:
+			foto_rodada.append(c.foto())
+		retrocedeu = false
 		for c in ordem:
 			if acabou:
 				return
@@ -387,6 +719,8 @@ func _rodar_batalha() -> void:
 				continue
 			await _turno(c)
 			await _verificar_fim()
+			if retrocedeu:
+				break
 
 
 func _turno(c: Combatente) -> void:
@@ -396,10 +730,15 @@ func _turno(c: Combatente) -> void:
 	if sangue > 0:
 		_registrar("%s perde %d HP sangrando." % [c.nome, sangue])
 		await _pausa(0.6)
+		await _avisar_resistencia(c)
 		if not c.vivo():
 			_registrar("%s sangrou até a morte." % c.nome)
 			await _pausa()
 			return
+	if not await _aplicar_estados(c):
+		ativo = null
+		_atualizar_tudo()
+		return
 	_atualizar_tudo()
 	if c.eh_jogador:
 		var acao := await _escolher_acao(c)
@@ -410,48 +749,142 @@ func _turno(c: Combatente) -> void:
 	_atualizar_tudo()
 
 
-func _dano_base(c: Combatente, mult := 1.0) -> int:
-	return roundi(c.ataque_efetivo() * mult * rng.randf_range(0.85, 1.15))
+## Efeitos no começo do turno. Retorna false se `c` perde o turno.
+func _aplicar_estados(c: Combatente) -> bool:
+	var age := true
+	# Sanidade em 0: a loucura pode roubar o turno.
+	if c.sanidade_max > 0 and c.sanidade == 0:
+		if c.sol == "esperanca":
+			c.ganhar_sanidade(5)
+			_registrar("%s quase se perde, mas segura a mente no lugar. (Perseverança, +5 de sanidade)" % c.nome)
+			await _pausa(0.5)
+		elif rng.randf() < CHANCE_LOUCURA:
+			_registrar("%s ri sozinho, perdido na loucura, e não age." % c.nome)
+			await _pausa(0.6)
+			return false
+	for nome in c.estados.keys():
+		var e: Dictionary = c.estados[nome]
+		match nome:
+			"veneno":
+				c.hp = maxi(0, c.hp - e["valor"])
+				c.nunca_desistir()
+				_registrar("%s sofre %d de dano da doença." % [c.nome, e["valor"]])
+				_efeito("luz", _pos_alvo(c, "torso"), 0.6, 0.8, Color(0.5, 0.9, 0.2))
+			"regeneracao":
+				var curado := c.curar(maxi(1, roundi(c.hp_max * e["valor"] / 100.0)))
+				if curado > 0:
+					_registrar("%s regenera %d HP." % [c.nome, curado])
+			"paralisia":
+				c.hp = maxi(0, c.hp - e["valor"])
+				c.nunca_desistir()
+				_registrar("Os espinhos prendem %s: %d de dano. Não consegue se mover." % [c.nome, e["valor"]])
+				_efeito("corte", _pos_alvo(c, "pernas"), 0.7, 0.8, Color(0.4, 0.9, 0.3))
+				age = false
+			"medo":
+				_registrar("%s treme de medo e não age." % c.nome)
+				age = false
+			"ofuscado":
+				_registrar("%s está cego pela luz e não age." % c.nome)
+				age = false
+			"cadaver":
+				if inimigo.vivo() and c.eh_jogador:
+					var intactas: Array = inimigo.partes_intactas()
+					var parte: String = intactas[rng.randi() % intactas.size()]
+					_registrar("O cadáver erguido por %s ataca %s." % [c.nome, _onde(inimigo, parte)])
+					await _pausa(0.4)
+					await _golpear(inimigo, parte, e["valor"] + rng.randi_range(0, 3), 1.0, false, "corte")
+					if e["turnos"] == 1:
+						_registrar("O cadáver desaba de novo.")
+			"atordoado":
+				_registrar("%s está caído e perde o turno." % c.nome)
+				age = false
+			"forca", "escudo", "projetado", "exposto", "ameacado", "enganado":
+				# Só contam os turnos (sem mensagem nem pausa).
+				if e["turnos"] > 0:
+					e["turnos"] -= 1
+					if e["turnos"] == 0:
+						c.estados.erase(nome)
+				continue
+			"encantado":
+				if rng.randi_range(1, 100) <= e["valor"]:
+					_registrar("%s resiste ao encanto (teste de vontade)!" % c.nome)
+					c.estados.erase(nome)
+					continue
+				_registrar("%s está encantado e não ataca." % c.nome)
+				age = false
+			_:
+				continue
+		if c.estados.has(nome) and e["turnos"] > 0:
+			e["turnos"] -= 1
+			if e["turnos"] == 0:
+				c.estados.erase(nome)
+		await _pausa(0.5)
+		await _avisar_resistencia(c)
+		if not c.vivo():
+			_registrar("%s cai." % c.nome)
+			await _pausa()
+			return false
+	return age
+
+
+## Avisa quando a passiva Nunca desistir (Sol da Vida) acabou de salvar `c`.
+func _avisar_resistencia(c: Combatente) -> void:
+	if not c.resistiu:
+		return
+	c.resistiu = false
+	_registrar("%s chega ao limite, mas se recusa a cair! (Nunca desistir)" % c.nome)
+	_efeito("luz", _pos_alvo(c, "torso"), 1.2, 1.0, Color(1.0, 0.85, 0.5))
+	await _pausa(0.6)
+
+
+func _dano_base(c: Combatente, mult := 1.0, base := 0, com_arma := true) -> int:
+	return roundi(c.poder_golpe(base, com_arma) * mult * rng.randf_range(0.85, 1.15))
+
+
+## Dano de golpe físico da party, com chance de crítico pela Sorte.
+func _dano_fisico(c: Combatente, mult := 1.0, base := 0, com_arma := true) -> int:
+	var dano := _dano_base(c, mult, base, com_arma)
+	if rng.randf() < c.chance_critico():
+		dano = roundi(dano * Combatente.MULT_CRITICO)
+		_registrar("Golpe crítico!")
+	return dano
 
 
 func _executar(c: Combatente, acao: Dictionary) -> void:
 	match acao["tipo"]:
 		"atacar":
-			var verbo := "ataca" if c.pode_atacar_com_arma() else "chuta"
-			_registrar("%s %s %s." % [c.nome, verbo, _onde(inimigo, acao["parte"])])
-			await _pausa(0.5)
-			await _golpear(inimigo, acao["parte"], _dano_base(c))
+			var golpe := c.ataque_basico()
+			var armado := c.tem_arma() and c.pode_atacar_com_arma()
+			var golpes := 2 if armado and c.tem_efeito("ataque_extra") else 1
+			c.contar_estilo("fisico")
+			for i in golpes:
+				if not inimigo.vivo():
+					break
+				var parte: String = acao["parte"]
+				if inimigo.decepado(parte):
+					parte = "torso"
+				_registrar("%s %s %s%s." % [c.nome, golpe["verbo"], _onde(inimigo, parte), " de novo" if i > 0 else ""])
+				await _pausa(0.5)
+				var efeito: String = golpe["efeito"]
+				if efeito == "corte" and rng.randf() < 0.5:
+					efeito = "corte_reto"
+				_pose(c, "soco", 0.7)
+				await _golpear(inimigo, parte, _dano_fisico(c, golpe["mult"]), golpe["precisao"], false, efeito)
 		"habilidade":
-			var h: Dictionary = Habilidades.DADOS[acao["id"]]
-			c.mp -= h["custo"]
-			_registrar("%s usa %s!" % [c.nome, h["nome"]])
-			await _pausa(0.5)
-			match h["alvo"]:
-				"inimigo":
-					var dano: int
-					if h.has("poder"):
-						dano = h["poder"] + rng.randi_range(-2, 4)
-					else:
-						dano = _dano_base(c, h.get("mult", 1.0))
-					await _golpear(inimigo, acao["parte"], dano, h.get("precisao", 1.0), h.get("ignora_esquiva", false))
-				"aliado":
-					var alvo: Combatente = acao["alvo"]
-					var curado := alvo.curar(h["cura"])
-					alvo.sangrando = false
-					_registrar("%s recupera %d HP. O sangramento para." % [alvo.nome, curado])
-				"proprio":
-					c.defendendo = true
-					c.mp = mini(c.mp_max, c.mp + h.get("mp_ganho", 0))
-					_registrar("%s firma a postura." % c.nome)
+			await _usar_habilidade(c, acao)
 		"item":
-			var alvo: Combatente = acao["alvo"]
-			Jogo.itens["bandagem"] -= 1
-			alvo.sangrando = false
-			var curado := alvo.curar(10)
-			_registrar("%s enfaixa %s: +%d HP, sangramento estancado." % [c.nome, alvo.nome, curado])
+			_usar_item(c, acao["item"], acao["alvo"])
 		"defender":
+			_efeito("bloqueio", _pos_alvo(c, "torso"))
 			c.defendendo = true
-			_registrar("%s se defende." % c.nome)
+			c.contar_estilo("defesa")
+			_pose(c, "guarda")
+			_registrar("%s %s." % [c.nome, "se protege atrás do escudo" if c.usa_escudo() else "bloqueia"])
+		"falar":
+			_registrar("%s tenta falar com %s." % [c.nome, inimigo.nome])
+			await _pausa(0.7)
+			var falas: Array = Inimigos.DADOS[inimigo_id].get("falas", [])
+			_registrar(falas[rng.randi() % falas.size()] if not falas.is_empty() else "%s não responde." % inimigo.nome)
 		"fugir":
 			var chance := CHANCE_FUGA
 			for membro in party:
@@ -466,6 +899,141 @@ func _executar(c: Combatente, acao: Dictionary) -> void:
 	await _pausa()
 
 
+func _usar_item(c: Combatente, id: String, alvo: Combatente) -> void:
+	var d: Dictionary = Itens.DADOS[id]
+	if Jogo.itens.get(id, 0) <= 0:
+		return
+	Jogo.itens[id] -= 1
+	if alvo != null:
+		_efeito("luz", _pos_alvo(alvo, "torso"), 0.7)
+	match d["uso"]:
+		"cura":
+			var curado := alvo.curar(d.get("cura", 0))
+			var texto := "%s usa %s em %s: +%d HP" % [c.nome, d["nome"], alvo.nome, curado]
+			if d.get("estanca", false) and alvo.sangrando:
+				alvo.sangrando = false
+				texto += ", sangramento estancado"
+			_registrar(texto + ".")
+		"mp":
+			var antes := alvo.mp
+			alvo.mp = mini(alvo.mp_max, alvo.mp + d.get("mp", 0))
+			_registrar("%s usa %s em %s: +%d MP." % [c.nome, d["nome"], alvo.nome, alvo.mp - antes])
+		"sanidade":
+			var ganho := alvo.ganhar_sanidade(d.get("sanidade", 0))
+			alvo.estados.erase("medo")
+			_registrar("%s usa %s em %s: +%d de sanidade." % [c.nome, d["nome"], alvo.nome, ganho])
+		"antidoto":
+			alvo.estados.erase("veneno")
+			_registrar("%s usa %s em %s: o veneno some." % [c.nome, d["nome"], alvo.nome])
+		"pedra":
+			_registrar(Jogo.ganhar_cargas(d.get("cargas", 1)))
+
+
+func _usar_habilidade(c: Combatente, acao: Dictionary) -> void:
+	var h: Dictionary = Habilidades.DADOS[acao["id"]]
+	var forca := 1.0
+	c.contar_estilo("magia_" + h["sol"] if h.get("magia", false) else "fisico")
+	if h.get("magia", false):
+		c.contar_estilo("magia")
+		forca = Jogo.forca_magia(luz)
+		if forca <= 0.0:
+			c.colar_usado = true
+			forca = 0.8
+			_registrar("O Colar do Sol de %s libera o raio de sol que guardava." % c.nome)
+			await _pausa(0.6)
+		elif luz == "escuro" and Jogo.gastar_carga_solar():
+			_registrar("O último sol gravado na Pedra Solar se apaga. Ela vira pó.")
+			await _pausa(0.6)
+		# Conexão com os Sóis pesa junto com a luz.
+		forca *= c.mult_magia()
+	if h["alvo"] == "batalha":
+		# Retroceder: volta todos para o começo da rodada; o MP gasto não volta.
+		inimigo.restaurar(foto_rodada[0])
+		for i in party.size():
+			party[i].restaurar(foto_rodada[i + 1])
+		c.mp = maxi(0, c.mp - h["custo"])
+		_registrar("%s usa %s! O tempo volta ao começo da rodada." % [c.nome, h["nome"]])
+		_pose(c, "magia", 1.0)
+		_efeito(h.get("efeito", ""), Vector2(480, 200), 3.0, 0.7, h.get("cor", Color.WHITE))
+		retrocedeu = true
+		return
+	c.mp -= h["custo"]
+	_registrar("%s usa %s!" % [c.nome, h["nome"]])
+	_pose(c, "magia" if h.get("magia", false) else "soco", 1.0)
+	await _pausa(0.5)
+	var efeito: String = h.get("efeito", "")
+	var cor: Color = h.get("cor", Color.WHITE)
+	if h.has("muda_luz"):
+		_efeito(efeito, Vector2(480, 200), 3.0, 0.7, cor)
+		_mudar_luz(h["muda_luz"]["luz"], h["muda_luz"]["turnos"])
+		return
+	var alvos: Array[Combatente] = []
+	match h["alvo"]:
+		"inimigo":
+			var dano := 0
+			if h.has("dano_magico"):
+				dano = roundi(h["dano_magico"] * forca * c.mult_dano_magico() * rng.randf_range(0.85, 1.15))
+				if h.get("com_arma", false):
+					dano += _dano_base(c, 1.0, h.get("base", 0), true)
+			else:
+				dano = _dano_fisico(c, 1.0, h.get("base", 0) + (c.bloqueio_escudo if h.get("soma_escudo", false) else 0),
+					h.get("com_arma", false))
+			if h.get("perfura", false):
+				# Ignora a armadura: aumenta o dano para compensar a redução.
+				dano = roundi(dano / maxf(0.2, 1.0 - mini(inimigo.defesa, Combatente.DEFESA_MAXIMA) / 100.0))
+			var r := await _golpear(inimigo, acao["parte"], dano, h.get("precisao", 1.0), h.get("ignora_esquiva", false), efeito, cor)
+			if r["acertou"] and inimigo.vivo():
+				if h.get("sangria", false) and not inimigo.sangrando:
+					inimigo.sangrando = true
+					_registrar("%s começa a sangrar." % inimigo.nome)
+				if h.has("estado") and rng.randf() <= h.get("chance", 1.0):
+					inimigo.estados[h["estado"]["nome"]] = h["estado"].duplicate()
+					_registrar("%s: %s." % [inimigo.nome, Combatente.NOME_ESTADO[h["estado"]["nome"]]])
+			return
+		"inimigo_corpo":
+			alvos = [inimigo]
+		"aliado":
+			alvos = [acao["alvo"]]
+		"proprio":
+			alvos = [c]
+		"aliados":
+			for membro in party:
+				if membro.vivo():
+					alvos.append(membro)
+	for alvo in alvos:
+		_efeito(efeito, _pos_alvo(alvo, "torso"), 1.0, 1.0, cor)
+		if h.has("cura_pct"):
+			var curado := alvo.curar(maxi(1, roundi(alvo.hp_max * h["cura_pct"] / 100.0 * forca * c.mult_cura())))
+			_registrar("%s recupera %d HP." % [alvo.nome, curado])
+		if h.has("cura"):
+			var curado := alvo.curar(roundi(h["cura"] * c.mult_cura()))
+			_registrar("%s recupera %d HP." % [alvo.nome, curado])
+		if h.get("estanca", false) and alvo.sangrando:
+			alvo.sangrando = false
+			_registrar("O sangramento de %s para." % alvo.nome)
+		if h.has("sanidade"):
+			var ganho := alvo.ganhar_sanidade(maxi(1, roundi(h["sanidade"] * forca * c.mult_cura())))
+			alvo.estados.erase("medo")
+			_registrar("%s recupera %d de sanidade." % [alvo.nome, ganho])
+		if h.has("estado"):
+			var chance: float = h.get("chance", 1.0)
+			if h.get("chance_por_hp", false):
+				# Levantar cadáver: quanto mais forte o inimigo, mais difícil.
+				chance = clampf(1.15 - inimigo.hp_max / 200.0, 0.4, 0.95)
+			if rng.randf() > chance:
+				_registrar("%s resiste a %s." % [alvo.nome, h["nome"]])
+				continue
+			if alvo.imune_a(h["estado"]["nome"]):
+				_registrar("%s é imune a %s." % [alvo.nome, h["nome"]])
+				continue
+			var e: Dictionary = h["estado"].duplicate()
+			if e["nome"] in ["veneno", "paralisia", "cadaver"]:
+				e["valor"] = maxi(1, roundi(e["valor"] * forca))
+			alvo.estados[e["nome"]] = e
+			_registrar("%s: %s." % [alvo.nome, Combatente.NOME_ESTADO[e["nome"]]])
+		await _pausa(0.3)
+
+
 func _turno_inimigo(c: Combatente) -> void:
 	var vivos: Array[Combatente] = []
 	for membro in party:
@@ -475,12 +1043,65 @@ func _turno_inimigo(c: Combatente) -> void:
 		return
 	var alvo: Combatente = vivos[rng.randi() % vivos.size()]
 	var parte := _sortear_parte(alvo)
-	var golpe: Dictionary = c.ataques[rng.randi() % c.ataques.size()]
+	# Magia do inimigo segue a mesma regra da luz, com as Pedras Solares dele.
+	var golpes := []
+	for g in c.ataques:
+		if g.has("muda_luz") and g["muda_luz"]["luz"] == luz:
+			continue  # já está nessa luz
+		if not g.get("magia", false) or luz != "escuro" or c.cargas_solares > 0:
+			golpes.append(g)
+	var golpe: Dictionary = golpes[rng.randi() % golpes.size()]
+	if c.estados.has("enganado"):
+		# Enganar (Sol do Coração): acredita na mentira e golpeia a si mesmo.
+		c.estados.erase("enganado")
+		var proprio := _dano_base(c, 0.8)
+		_registrar("%s acredita na mentira e golpeia a si mesmo!" % c.nome)
+		await _pausa(0.5)
+		c.hp = maxi(0, c.hp - proprio)
+		_efeito("impacto", _pos_alvo(c, "torso"), 1.0)
+		_piscar(sprite_inimigo)
+		_registrar("%d de dano em %s." % [proprio, c.nome])
+		await _pausa()
+		return
+	if golpe.has("muda_luz"):
+		_registrar("%s usa %s." % [c.nome, golpe["nome"]])
+		await _pausa(0.5)
+		_mudar_luz(golpe["muda_luz"]["luz"], golpe["muda_luz"]["turnos"])
+		await _pausa()
+		return
 	if not c.pode_atacar_com_arma():
-		golpe = {"nome": "Investida desesperada", "mult": 0.8}
+		golpe = {"nome": "Investida desesperada", "mult": 0.8, "efeito": "impacto"}
+	var magia: bool = golpe.get("magia", false)
+	var dano := _dano_base(c, golpe.get("mult", 1.0))
+	if magia:
+		var forca := Jogo.forca_magia(luz) if luz != "escuro" else 0.8
+		dano = roundi((golpe["poder"] + rng.randi_range(-2, 4)) * forca)
+		if luz == "escuro":
+			c.cargas_solares -= 1
 	_registrar("%s usa %s %s." % [c.nome, golpe["nome"], _onde(alvo, parte)])
 	await _pausa(0.5)
-	await _golpear(alvo, parte, _dano_base(c, golpe.get("mult", 1.0)), golpe.get("precisao", 1.0))
+	var efeito: String = golpe.get("efeito", "corte")
+	if efeito == "raio":
+		await _raio(POS_INIMIGO + MAO_RAIO, _pos_alvo(alvo, parte))
+		efeito = "faisca"
+	var precisao: float = golpe.get("precisao", 1.0)
+	if c.estados.has("ameacado"):
+		precisao *= 1.0 - c.estados["ameacado"]["valor"] / 100.0
+	var r := await _golpear(alvo, parte, dano, precisao, golpe.get("ignora_esquiva", false), efeito)
+	if r["acertou"] and alvo.vivo():
+		if golpe.has("sanidade"):
+			var perdeu := alvo.perder_sanidade(golpe["sanidade"])
+			if perdeu > 0:
+				await _pausa(0.4)
+				_registrar("%s perde %d de sanidade.%s" % [alvo.nome, perdeu,
+					" A mente se parte!" if alvo.sanidade == 0 else ""])
+		if golpe.has("estado") and rng.randf() <= golpe.get("chance", 1.0) and not alvo.imune_a(golpe["estado"]["nome"]):
+			alvo.estados[golpe["estado"]["nome"]] = golpe["estado"].duplicate()
+			await _pausa(0.4)
+			_registrar("%s: %s." % [alvo.nome, Combatente.NOME_ESTADO[golpe["estado"]["nome"]]])
+	if magia and luz == "escuro" and c.cargas_solares == 0:
+		await _pausa(0.4)
+		_registrar("A Pedra Solar de %s se desfaz em pó." % c.nome)
 	await _pausa()
 
 
@@ -507,13 +1128,31 @@ func _onde(alvo: Combatente, parte: String) -> String:
 	return ""
 
 
-func _golpear(alvo: Combatente, parte: String, dano: int, precisao := 1.0, ignora_esquiva := false) -> void:
-	var r := alvo.receber_golpe(parte, dano, rng, precisao, ignora_esquiva)
+func _golpear(alvo: Combatente, parte: String, dano: int, precisao := 1.0, ignora_esquiva := false,
+		efeito := "corte", cor := Color.WHITE) -> Dictionary:
+	var r := alvo.receber_golpe(parte, dano, rng, _precisao_luz(precisao), ignora_esquiva)
+	var pos := _pos_alvo(alvo, parte)
 	if not r["acertou"]:
-		_registrar("Errou!")
-		return
-	_piscar(sprite_inimigo if alvo == inimigo else cartoes[party.find(alvo)]["painel"])
+		_efeito("impacto", pos + Vector2(rng.randf_range(-40, 40), -20), 0.5, 0.45)
+		if r.get("atravessou", false):
+			_registrar("O golpe atravessa o corpo vazio de %s!" % alvo.nome)
+		elif r.get("previu", false):
+			_registrar("%s já tinha visto esse golpe e desvia!" % alvo.nome)
+		else:
+			_registrar("Errou!")
+		return r
+	_efeito(efeito, pos, 1.0, 1.0, cor)
+	if r["decepou"]:
+		_efeito("faisca", pos, 1.3)
+	if alvo == inimigo:
+		_piscar(sprite_inimigo)
+	else:
+		_piscar(cartoes[party.find(alvo)]["painel"])
+		if alvo in figuras:
+			_pose(alvo, "dano", 0.7)
+			_piscar(figuras[alvo])
 	_registrar("%d de dano em %s." % [r["dano"], alvo.nome])
+	await _avisar_resistencia(alvo)
 	if r["decepou"]:
 		await _pausa(0.5)
 		if parte == "cabeca":
@@ -523,6 +1162,77 @@ func _golpear(alvo: Combatente, parte: String, dano: int, precisao := 1.0, ignor
 	if r["morreu"] and parte != "cabeca":
 		await _pausa(0.5)
 		_registrar("%s cai." % alvo.nome)
+	return r
+
+
+# ================================================================ Efeitos
+
+## Posição na tela de uma parte do inimigo, ou do retrato de um membro da party.
+func _pos_alvo(alvo: Combatente, parte: String) -> Vector2:
+	if alvo == inimigo:
+		if parte in inimigo.regioes:
+			var r: Rect2 = inimigo.regioes[parte]
+			return POS_INIMIGO + r.get_center()
+		return POS_INIMIGO + sprite_inimigo.texture.get_size() / 2
+	if alvo in figuras:
+		var figura: TextureRect = figuras[alvo]
+		var fracao: Vector2 = PARTES_COSTAS.get(parte, PARTES_COSTAS["torso"])
+		if figura.flip_h:
+			fracao.x = 1.0 - fracao.x
+		return figura.position + figura.texture.get_size() * fracao * ESCALA_COSTAS
+	var painel: Control = cartoes[party.find(alvo)]["painel"]
+	return painel.position + Vector2(24, 24)
+
+
+func _material_aditivo() -> CanvasItemMaterial:
+	var material := CanvasItemMaterial.new()
+	material.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	return material
+
+
+## Efeito de golpe ou magia: brilho aditivo que cresce e some.
+func _efeito(nome: String, pos: Vector2, escala := 1.0, opacidade := 1.0, cor := Color.WHITE) -> void:
+	var caminho := "res://assets/efeitos/%s.png" % nome
+	if nome == "" or not ResourceLoader.exists(caminho):
+		return
+	var sprite := Sprite2D.new()
+	sprite.texture = load(caminho)
+	sprite.material = _material_aditivo()
+	sprite.position = pos
+	sprite.scale = Vector2.ONE * escala * 0.7
+	sprite.rotation = rng.randf_range(-0.3, 0.3)
+	sprite.modulate = Color(cor, opacidade)
+	add_child(sprite)
+	var tween := sprite.create_tween()
+	tween.set_parallel()
+	tween.tween_property(sprite, "scale", Vector2.ONE * escala * 1.1, 0.4).set_ease(Tween.EASE_OUT)
+	tween.tween_property(sprite, "modulate:a", 0.0, 0.45).set_delay(0.15)
+	tween.chain().tween_callback(sprite.queue_free)
+
+
+## Raio animado, esticado de `de` até `ate`, com clarões na tela.
+func _raio(de: Vector2, ate: Vector2) -> void:
+	var sprite := Sprite2D.new()
+	sprite.texture = load("res://assets/efeitos/raio.png")
+	sprite.hframes = QUADROS_RAIO
+	sprite.centered = false
+	sprite.offset = Vector2(0, -50)
+	sprite.material = _material_aditivo()
+	sprite.position = de
+	sprite.rotation = (ate - de).angle()
+	sprite.scale = Vector2(de.distance_to(ate) / 220.0, 1.0)
+	add_child(sprite)
+	var clarao := ColorRect.new()
+	clarao.color = Color(1, 0.95, 0.6, 0.0)
+	clarao.set_anchors_preset(Control.PRESET_FULL_RECT)
+	clarao.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(clarao)
+	for i in QUADROS_RAIO * 2:
+		sprite.frame = i % QUADROS_RAIO
+		clarao.color.a = 0.18 if i % 3 == 0 else 0.0
+		await _pausa(0.05)
+	sprite.queue_free()
+	clarao.queue_free()
 
 
 func _verificar_fim() -> void:
@@ -530,6 +1240,13 @@ func _verificar_fim() -> void:
 		return
 	if not inimigo.vivo():
 		_registrar("Vitória. Os Nove Sóis assistem em silêncio.")
+		if inimigo_chefe():
+			Jogo.eventos["chefe_derrotado"] = true
+		Jogo.ultimo_saque.clear()
+		for par in Inimigos.DADOS[inimigo_id].get("saque", []):
+			if rng.randf() < par[1]:
+				Jogo.itens[par[0]] = Jogo.itens.get(par[0], 0) + 1
+				Jogo.ultimo_saque.append(par[0])
 		await _pausa(1.2)
 		_encerrar("vitoria")
 		return

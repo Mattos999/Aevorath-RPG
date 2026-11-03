@@ -1,0 +1,16 @@
+[remap]
+
+importer="dialogue_manager"
+importer_version=18
+type="Resource"
+uid="uid://d1sduar4ig0p"
+path="res://.godot/imported/encapuzado.dialogue-56cb3959061145d308a17d22d9e8f8fb.tres"
+
+[deps]
+
+source_file="res://dialogos/encapuzado.dialogue"
+dest_files=["res://.godot/imported/encapuzado.dialogue-56cb3959061145d308a17d22d9e8f8fb.tres"]
+
+[params]
+
+defaults=true

@@ -1,0 +1,27 @@
+~ start
+if Jogo.eventos.has("encapuzado")
+	???: Vá. Eu ainda tenho coisas a resolver aqui.
+	=> END
+???: Acorda {{Jogo.genero("garoto", "garota")}}!!
+{{Jogo.nome_heroi()}}: Qu..Quem é você?
+{{Jogo.nome_heroi()}}: COF...COF...
+???: Alguém tentando salvar a sua pele, toma aqui, as chaves da cela.
+$> dar_item("chave")
+$> Jogo.ganhar_pedra_solar()
+$> marcar("encapuzado")
+Você recebeu a Chave das celas e uma Pedra Solar (9 cargas).
+{{Jogo.nome_heroi()}}: Por que você está me ajudando?
+???: Não temos tempo para explicações, você tem que ir.
+???: Anda, sai logo daqui!!
+=> END
+
+~ esgoto
+???: Demorou. Achei que os ratos tinham te comido.
+{{Jogo.nome_heroi()}}: Você! Como chegou aqui antes de mim?
+???: Eu conheço esses túneis melhor do que os próprios ratos.
+???: Escuta. Atrás dessa porta tem um Inquisidor dos Nove Sóis. Ele desceu atrás de você.
+???: Sozinh{{Jogo.genero("o", "a")}} você não passa. Eu vou junto.
+$> recrutar()
+O encapuzado entrou na party.
+???: Mire nas juntas da armadura. E não deixe ele falar muito: as palavras dele pesam na cabeça.
+=> END
